@@ -1,0 +1,56 @@
+================================================================================
+BATCH 1A HOTFIX - Logger NameError Fix
+================================================================================
+
+FILE: backend/main.py
+ISSUE: NameError: name 'logger' is not defined in warmup_ollama()
+FIX: Add module-level logger declaration
+
+================================================================================
+DIFF
+================================================================================
+
+@@ Line 17-23 @@
+ # Configure logging
+ logging.basicConfig(
+     level=logging.INFO,
+     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+ )
++logger = logging.getLogger(__name__)
+ 
+ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+================================================================================
+SUMMARY
+================================================================================
+
+Files Changed:     1 (backend/main.py)
+Lines Added:       +1
+Lines Removed:     0
+Net Change:        +1 line
+
+Change:
+  ✓ Added logger = logging.getLogger(__name__) at module level
+
+Fix Applied:
+  ✓ warmup_ollama() can now access logger
+  ✓ [Startup] log messages will appear correctly
+  ✓ No other logic changed
+
+Risk Level: MINIMAL (single variable declaration)
+
+================================================================================
+TESTING
+================================================================================
+
+Start backend:
+  cd anvikshaka-x/backend
+  python main.py
+
+Expected output:
+  [Startup] Warming up Ollama model...
+  [Startup] Ollama warm-up complete
+
+No error should occur.
+
+================================================================================
