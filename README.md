@@ -487,68 +487,102 @@ LOG_LEVEL=INFO
 
 ### Environment Files
 
-**Local Development - Backend** (`.env` in `backend/` directory):
+**Local Development - Backend** (`backend/.env`):
 ```bash
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_key
-
-# Optional: Enable database seeding on startup
 SEED_DATABASE=true
+FRONTEND_URL=http://localhost:5173
 ```
 
-**Local Development - Frontend** (`.env` in `frontend/` directory):
+**Local Development - Frontend** (`frontend/.env`):
 ```bash
 VITE_API_URL=http://localhost:8000/api
 ```
 
 **Production on Vercel:**
 
-All production environment variables must be set in the **Vercel Project Dashboard** under Settings → Environment Variables:
-
+**Backend Project Environment Variables** (Vercel Dashboard → Backend Project → Settings → Environment Variables):
 - `AI_PROVIDER=gemini` (required)
 - `GEMINI_API_KEY=<your_actual_key>` (required)
 - `SEED_DATABASE=false` (recommended)
+- `FRONTEND_URL=https://your-frontend.vercel.app` (required - add after frontend deployment)
 
-Frontend automatically uses `/api` endpoint via Vercel routing. No `.env.production` file is needed.
+**Frontend Project Environment Variables** (Vercel Dashboard → Frontend Project → Settings → Environment Variables):
+- `VITE_API_URL=https://your-backend.vercel.app/api` (required - use your backend URL)
 
 ## Deployment
 
 ### Vercel Deployment (Recommended)
 
-ANVIKSHAKA-X is configured for seamless deployment on Vercel with Gemini AI:
+ANVIKSHAKA-X uses a **two-project deployment** on Vercel:
+- **Project 1:** Backend API (from `/backend` directory)
+- **Project 2:** Frontend SPA (from `/frontend` directory)
 
-#### 1. Prerequisites
+#### Prerequisites
 
 - Vercel account
 - Google Gemini API key ([Get one here](https://makersuite.google.com/app/apikey))
-- GitHub repository connected to Vercel
+- GitHub repository pushed to GitHub
 
-#### 2. Deploy to Vercel
+#### Step 1: Deploy Backend API
 
-**Via Vercel Dashboard:**
-1. Go to [vercel.com](https://vercel.com) and import your GitHub repository
-2. Framework Preset: **Other** (auto-detected)
-3. Build settings are handled by `vercel.json`
-4. Go to Project Settings → Environment Variables and add:
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import your GitHub repository: `ANVIKSHAKA-X`
+3. Configure project:
+   - **Project Name:** `anvikshaka-x-backend` (or your choice)
+   - **Framework Preset:** Other
+   - **Root Directory:** `backend`
+   - **Build Command:** (leave empty)
+   - **Output Directory:** (leave empty)
+4. **Environment Variables** (click Add):
    - `AI_PROVIDER` = `gemini`
-   - `GEMINI_API_KEY` = `<your_key_from_google_ai_studio>`
+   - `GEMINI_API_KEY` = `<your_gemini_api_key>`
    - `SEED_DATABASE` = `false`
-5. Deploy
+   - `FRONTEND_URL` = (leave empty for now, will update after frontend deployment)
+5. Click **Deploy**
+6. **Save the deployed URL** (e.g., `https://anvikshaka-x-backend.vercel.app`)
 
-**Via CLI:**
-```bash
-npm install -g vercel
-vercel
+#### Step 2: Deploy Frontend SPA
+
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import the same GitHub repository: `ANVIKSHAKA-X`
+3. Configure project:
+   - **Project Name:** `anvikshaka-x-frontend` (or your choice)
+   - **Framework Preset:** Vite
+   - **Root Directory:** `frontend`
+   - **Build Command:** `npm run build` (auto-detected)
+   - **Output Directory:** `dist` (auto-detected)
+4. **Environment Variables** (click Add):
+   - `VITE_API_URL` = `https://anvikshaka-x-backend.vercel.app/api` (use your backend URL from Step 1)
+5. Click **Deploy**
+6. **Save the deployed URL** (e.g., `https://anvikshaka-x-frontend.vercel.app`)
+
+#### Step 3: Update Backend CORS
+
+1. Go to your **Backend Vercel project** → Settings → Environment Variables
+2. Add or update:
+   - `FRONTEND_URL` = `https://anvikshaka-x-frontend.vercel.app` (use your frontend URL from Step 2)
+3. **Redeploy** the backend project (Deployments tab → click ⋯ → Redeploy)
+
+#### Deployment Summary
+
+| Project | Root Directory | Environment Variables | Purpose |
+|---------|---------------|----------------------|---------|
+| **Backend** | `backend/` | `AI_PROVIDER`, `GEMINI_API_KEY`, `SEED_DATABASE`, `FRONTEND_URL` | FastAPI REST API |
+| **Frontend** | `frontend/` | `VITE_API_URL` | React SPA |
+
+**Architecture:**
+```
+Frontend (Vercel) → API calls → Backend (Vercel)
+https://your-frontend.vercel.app → https://your-backend.vercel.app/api
 ```
 
-Then set environment variables in Vercel dashboard under Project Settings → Environment Variables.
-
-The deployment automatically:
-- Builds the React frontend with Vite
-- Deploys the FastAPI backend as serverless functions
-- Routes `/api/*` requests to the backend
-- Serves frontend static files from root
-- Handles SPA routing (page refresh works correctly on all routes)
+**Important:**
+- Deploy backend first to get its URL
+- Use backend URL in frontend's `VITE_API_URL`
+- Update backend's `FRONTEND_URL` with frontend URL after frontend deployment
+- Both projects use the same GitHub repository but different root directories
 
 ### Alternative: Docker Deployment
 
@@ -611,11 +645,14 @@ volumes:
 
 ### Hybrid Deployment Strategy
 
-**Production (Online):**
-- Deploy to Vercel
+**Production (Vercel):**
+- Backend: Separate Vercel project from `/backend`
+- Frontend: Separate Vercel project from `/frontend`
 - Use Gemini AI (`AI_PROVIDER=gemini`)
-- Set `GEMINI_API_KEY` in Vercel environment variables
-- Database: PostgreSQL (upgrade from SQLite)
+- Set `GEMINI_API_KEY` in backend project
+- Set `VITE_API_URL` in frontend project
+- Set `FRONTEND_URL` in backend project
+- Database: Consider PostgreSQL (upgrade from SQLite)
 
 **Development (Local):**
 - Run locally with `python main.py`

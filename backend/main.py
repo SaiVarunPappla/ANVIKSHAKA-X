@@ -26,11 +26,23 @@ if _PROJECT_ROOT not in sys.path: sys.path.insert(0, _PROJECT_ROOT)
 
 app = FastAPI(title="ANVIKSHAKA-X", version="2.0.0")
 
-# CORS - allow all origins without credentials (Vercel handles auth if needed)
+# CORS - allow frontend origins
+# For development: http://localhost:5173
+# For production: set via FRONTEND_URL environment variable
+allowed_origins = [
+    "http://localhost:5173",  # Local dev
+    "http://localhost:3000",  # Alternative local dev
+]
+
+# Add production frontend URL if configured
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    allowed_origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # Must be False when allow_origins=["*"]
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
