@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Send, User, Cpu, Zap, MessageSquare } from 'lucide-react'
-import axios from 'axios'
+import api from '../lib/api'
 import GlassCard from '../components/bits/GlassCard'
 import RadarScan from '../components/bits/RadarScan'
 import TypewriterText from '../components/bits/TypewriterText'
-
-const API = 'http://localhost:8000/api'
 
 // Animation variants
 const containerVariants = {
@@ -61,7 +59,7 @@ export default function Chat() {
     setInput('')
     setLoading(true)
     try {
-      const res = await axios.post(`${API}/chat`, { message: text })
+      const res = await api.post('/chat', { message: text })
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: res.data.response }])
     } catch (err) {
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: "Connection error." }])

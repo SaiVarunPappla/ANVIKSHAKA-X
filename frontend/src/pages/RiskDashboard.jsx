@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ShieldAlert, AlertCircle, Zap } from 'lucide-react'
-import axios from 'axios'
+import api from '../lib/api'
 import RiskPanel from '../components/RiskPanel'
 import GlassCard from '../components/bits/GlassCard'
-
-const API = 'http://localhost:8000/api'
 
 // Animation variants
 const containerVariants = {
@@ -38,7 +36,7 @@ export default function RiskDashboard() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    axios.get(`${API}/missions`).then(res => {
+    api.get('/missions').then(res => {
       setMissions(res.data)
       if (res.data.length > 0) setSelectedMission(res.data[0].id)
     })
@@ -47,7 +45,7 @@ export default function RiskDashboard() {
   useEffect(() => {
     if (!selectedMission) return
     setLoading(true)
-    axios.post(`${API}/risk-analysis`, { mission_id: selectedMission })
+    api.post('/risk-analysis', { mission_id: selectedMission })
       .then(res => setRiskData(res.data))
       .finally(() => setLoading(false))
   }, [selectedMission])

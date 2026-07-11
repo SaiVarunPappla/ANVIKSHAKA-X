@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Target, ShieldAlert, BatteryCharging, Wrench, Activity, ChevronRight, Zap, Radio } from 'lucide-react'
-import axios from 'axios'
+import api from '../lib/api'
 import KPICard from '../components/KPICard'
 import GlassCard from '../components/bits/GlassCard'
 import CommandInput from '../components/bits/CommandInput'
-
-const API = 'http://localhost:8000/api'
 
 // Animation variants
 const containerVariants = {
@@ -34,7 +32,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    axios.get(`${API}/dashboard`).then(res => setData(res.data)).catch(err => console.error(err)).finally(() => setLoading(false))
+    api.get('/dashboard').then(res => setData(res.data)).catch(err => console.error(err)).finally(() => setLoading(false))
   }, [])
 
   if (loading) {

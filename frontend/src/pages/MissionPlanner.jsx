@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import axios from 'axios'
+import api from '../lib/api'
 import { Target, Cpu, AlertTriangle, Zap } from 'lucide-react'
 import MissionForm from '../components/MissionForm'
 import AgentOutputPanel from '../components/AgentOutputPanel'
 import GlassCard from '../components/bits/GlassCard'
 import RadarScan from '../components/bits/RadarScan'
-
-const API = 'http://localhost:8000/api'
 
 export default function MissionPlanner() {
   const [loading, setLoading] = useState(false)
@@ -16,7 +14,7 @@ export default function MissionPlanner() {
   const handleSubmit = async (formData) => {
     setLoading(true); setError(null); setResult(null)
     try {
-      const res = await axios.post(`${API}/mission`, formData)
+      const res = await api.post('/mission', formData)
       setResult(res.data)
     } catch (err) {
       setError('Failed to create mission. Check backend connection.')

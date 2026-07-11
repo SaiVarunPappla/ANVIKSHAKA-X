@@ -1,9 +1,7 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Terminal, CornerDownLeft } from 'lucide-react'
-import axios from 'axios'
-
-const API = 'http://localhost:8000/api'
+import api from '../../lib/api'
 
 export default function CommandInput({ onCommandSuccess }) {
   const [input, setInput] = useState('')
@@ -16,7 +14,7 @@ export default function CommandInput({ onCommandSuccess }) {
     setLoading(true)
     setResponse(null)
     try {
-      const res = await axios.post(`${API}/commander`, { command: input })
+      const res = await api.post('/commander', { command: input })
       setResponse({ success: true, message: `Mission "${res.data.mission_name}" created successfully.` })
       if (onCommandSuccess) onCommandSuccess(res.data)
     } catch (err) {

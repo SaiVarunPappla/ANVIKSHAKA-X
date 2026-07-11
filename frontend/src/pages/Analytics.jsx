@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart3, LineChart as LineChartIcon, TrendingUp, Activity, Database } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import axios from 'axios'
+import api from '../lib/api'
 import GlassCard from '../components/bits/GlassCard'
-
-const API = 'http://localhost:8000/api'
 
 // Animation variants
 const containerVariants = {
@@ -38,8 +36,8 @@ export default function Analytics() {
 
   useEffect(() => {
     Promise.all([
-      axios.get(`${API}/missions`).then(res => setMissions(res.data)),
-      axios.get(`${API}/assets`).then(res => setAssets(res.data))
+      api.get('/missions').then(res => setMissions(res.data)),
+      api.get('/assets').then(res => setAssets(res.data))
     ]).finally(() => setLoading(false))
   }, [])
 

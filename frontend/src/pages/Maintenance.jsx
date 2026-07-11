@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Wrench, RefreshCw, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import axios from 'axios'
+import api from '../lib/api'
 import MaintenanceTable from '../components/MaintenanceTable'
 import GlassCard from '../components/bits/GlassCard'
-
-const API = 'http://localhost:8000/api'
 
 // Animation variants
 const containerVariants = {
@@ -40,7 +38,7 @@ export default function Maintenance() {
     setLoading(true)
     setError(null)
     try {
-      const res = await axios.post(`${API}/maintenance`, { asset_ids: null })
+      const res = await api.post('/maintenance', { asset_ids: null })
       setPredictions(res.data)
     } catch (err) {
       setError('Failed to run maintenance prediction')
