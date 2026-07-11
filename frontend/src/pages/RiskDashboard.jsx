@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ShieldAlert, AlertCircle, Zap } from 'lucide-react'
-import api from '../lib/api'
+import api from '../lib/api.js'
 import RiskPanel from '../components/RiskPanel'
 import GlassCard from '../components/bits/GlassCard'
 

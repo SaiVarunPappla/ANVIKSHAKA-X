@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import api from '../lib/api'
+import api from '../lib/api.js'
 import { Target, Cpu, AlertTriangle, Zap } from 'lucide-react'
 import MissionForm from '../components/MissionForm'
 import AgentOutputPanel from '../components/AgentOutputPanel'

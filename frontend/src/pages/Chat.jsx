@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Send, User, Cpu, Zap, MessageSquare } from 'lucide-react'
-import api from '../lib/api'
+import api from '../lib/api.js'
 import GlassCard from '../components/bits/GlassCard'
 import RadarScan from '../components/bits/RadarScan'
 import TypewriterText from '../components/bits/TypewriterText'

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart3, LineChart as LineChartIcon, TrendingUp, Activity, Database } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import api from '../lib/api'
+import api from '../lib/api.js'
 import GlassCard from '../components/bits/GlassCard'
 
 // Animation variants

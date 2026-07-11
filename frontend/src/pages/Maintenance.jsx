@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Wrench, RefreshCw, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import api from '../lib/api'
+import api from '../lib/api.js'
 import MaintenanceTable from '../components/MaintenanceTable'
 import GlassCard from '../components/bits/GlassCard'
 

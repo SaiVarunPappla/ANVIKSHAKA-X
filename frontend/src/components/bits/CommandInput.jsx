@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Terminal, CornerDownLeft } from 'lucide-react'
-import api from '../../lib/api'
+import api from '../../lib/api.js'
 
 export default function CommandInput({ onCommandSuccess }) {
   const [input, setInput] = useState('')

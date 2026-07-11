@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Target, ShieldAlert, BatteryCharging, Wrench, Activity, ChevronRight, Zap, Radio } from 'lucide-react'
-import api from '../lib/api'
+import api from '../lib/api.js'
 import KPICard from '../components/KPICard'
 import GlassCard from '../components/bits/GlassCard'
 import CommandInput from '../components/bits/CommandInput'
