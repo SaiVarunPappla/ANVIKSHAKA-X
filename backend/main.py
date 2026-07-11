@@ -24,14 +24,13 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _PROJECT_ROOT not in sys.path: sys.path.insert(0, _PROJECT_ROOT)
 
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="ANVIKSHAKA-X", version="2.0.0")
 
+# CORS - allow all origins without credentials (Vercel handles auth if needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -44,22 +43,18 @@ app.include_router(chat.router)
 app.include_router(commander.router)
 
 @app.on_event("startup")
-async def warmup_ollama():
-    """Warm up Ollama model on startup (non-blocking)."""
-    import asyncio
-    
-    async def _warmup():
-        try:
-            agent = BaseAgent()
-            if agent.is_ollama_available():
-                logger.info("[Startup] Warming up Ollama model...")
-                agent.call_llm("You are a test assistant.", "Respond with OK.")
-                logger.info("[Startup] Ollama warm-up complete")
-        except Exception as e:
-            logger.warning(f"[Startup] Ollama warm-up failed: {e}")
-    
-    # Run warm-up in background without blocking startup
-    asyncio.create_task(_warmup())
+async def startup_init():
+    """Initialize on startup - serverless compatible."""
+    logger.info("[Startup] ANVIKSHAKA-X backend initializing...")
+    # Create tables if they don't exist (idempotent)
+    try:
+        Base.metadata.create_all(bind=engine)
+        # Only seed if explicitly enabled (avoid on serverless cold starts)
+        if os.getenv("SEED_DATABASE", "false").lower() == "true":
+            seed_database()
+            logger.info("[Startup] Database seeded")
+    except Exception as e:
+        logger.warning(f"[Startup] Initialization failed: {e}")
 
 @app.get("/")
 async def root():
@@ -68,15 +63,18 @@ async def root():
 @app.get("/api/health")
 async def health():
     base_agent = BaseAgent()
-    ollama_active = base_agent.is_ollama_available()
+    ai_available = base_agent.is_ai_available()
+    ai_provider = base_agent.get_ai_provider_name()
+    
     return {
         "status": "healthy", 
         "timestamp": datetime.utcnow().isoformat(),
-        "ollama": ollama_active,
-        "ai_model": "llama3" if ollama_active else "fallback"
+        "ai_provider": ai_provider,
+        "ai_available": ai_available
     }
 
 def seed_database():
+    """Seed database with sample data (idempotent)."""
     db = SessionLocal()
     try:
         if db.query(Asset).count() == 0:
@@ -89,13 +87,11 @@ def seed_database():
             ]
             db.add_all(sample_assets)
             db.commit()
-            print("[SEED] 5 sample assets inserted.")
+            logger.info("[SEED] 5 sample assets inserted.")
     finally:
         db.close()
 
 if __name__ == "__main__":
-    seed_database()
+    # Local development only
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-else:
-    seed_database()

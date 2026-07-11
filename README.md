@@ -11,11 +11,11 @@ ANVIKSHAKA-X automates naval mission planning through a multi-agent AI system. F
 ### Core Features
 
 - **Multi-Agent AI Pipeline** — Five agents collaborate to provide comprehensive mission analysis
+- **Hybrid AI Support** — Use Gemini (production) or Ollama (local/offline) with automatic fallback
 - **Risk Assessment** — Evaluates threats based on weather, duration, and operational factors
 - **Predictive Maintenance** — Machine learning-powered failure probability predictions
 - **Natural Language Interface** — Parse plain English commands into structured missions
 - **Glassmorphism UI** — Modern interface with smooth animations and responsive design
-- **Local AI Integration** — Optional Ollama/LLaMA3 support for enhanced narratives
 
 ## Architecture
 
@@ -34,16 +34,20 @@ graph TB
         Agents[5 AI Agents]
         DB[(SQLite Database)]
         ML[ML Model]
+        AIProvider[AI Provider]
     end
     
-    subgraph External["Optional AI"]
+    subgraph External["AI Providers"]
+        Gemini[Google Gemini]
         Ollama[Ollama LLM]
     end
     
     UI -->|HTTP/Axios| API
     API --> Agents
+    Agents --> AIProvider
+    AIProvider -.->|Production| Gemini
+    AIProvider -.->|Local/Offline| Ollama
     Agents --> DB
-    Agents -.->|Optional| Ollama
     Agents --> ML
     ML --> DB
 ```
@@ -61,7 +65,7 @@ graph LR
     E --> F[5. Supervisor]
     F --> G[Consolidated Brief]
     
-    B -.->|Optional| AI[Ollama LLM]
+    B -.->|Optional| AI[AI Provider<br/>Gemini or Ollama]
     C -.->|Optional| AI
     E -.->|Optional| AI
     F -.->|Optional| AI
@@ -85,7 +89,8 @@ graph LR
 
 - Python 3.11+
 - Node.js 18+
-- Ollama (optional, for AI-enhanced narratives)
+- **For local/offline mode:** Ollama (optional)
+- **For production deployment with AI:** Google Gemini API key (required for hosted AI-powered deployment; optional only if using rule-based fallback)
 
 ### Installation
 
@@ -107,6 +112,20 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Configure AI provider (choose one):
+# Option A: Use Gemini (production/online)
+export AI_PROVIDER=gemini
+export GEMINI_API_KEY=your_api_key_here
+
+# Option B: Use Ollama (local/offline - requires Ollama running)
+export AI_PROVIDER=ollama
+
+# Option C: Auto-detect (tries Gemini, then Ollama, then rule-based)
+export AI_PROVIDER=auto
+
+# Option D: No AI (rule-based only)
+export AI_PROVIDER=rule-based
 
 # Train ML model (first time only)
 cd ../ml
@@ -134,21 +153,40 @@ npm run dev
 
 Frontend will run on `http://localhost:5173`
 
-#### 4. Optional: Ollama Setup
+#### 4. AI Provider Setup
 
-For AI-enhanced narratives, install Ollama and pull the LLaMA3 model:
+**Option A: Google Gemini (Production/Online)**
 
+1. Get API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Set environment variables:
+   ```bash
+   export AI_PROVIDER=gemini
+   export GEMINI_API_KEY=your_api_key_here
+   export GEMINI_MODEL=gemini-1.5-flash  # optional, this is default
+   ```
+
+**Option B: Ollama (Local/Offline)**
+
+1. Install Ollama from [ollama.ai](https://ollama.ai)
+2. Pull the model: `ollama pull llama3`
+3. Set environment variables:
+   ```bash
+   export AI_PROVIDER=ollama
+   export OLLAMA_MODEL=llama3  # optional, this is default
+   # For custom Ollama URL: export OLLAMA_HOST=http://custom-host:11434
+   ```
+
+**Option C: Auto Mode (Recommended)**
+
+The system automatically selects the best available AI provider:
 ```bash
-# Install Ollama from https://ollama.ai
-
-# Pull llama3 model
-ollama pull llama3
-
-# Verify
-ollama list
+export AI_PROVIDER=auto
+# If GEMINI_API_KEY is set → uses Gemini
+# Else if Ollama is running → uses Ollama
+# Else → uses rule-based fallback
 ```
 
-The system automatically detects Ollama and uses it when available. Without Ollama, the system falls back to rule-based logic.
+The system gracefully degrades to rule-based logic if no AI provider is available.
 
 ## Tech Stack
 
@@ -161,7 +199,8 @@ The system automatically detects Ollama and uses it when available. Without Olla
 | **Pydantic** | Data validation and settings management |
 | **scikit-learn** | ML model training (Random Forest) |
 | **pandas/numpy** | Data processing and analysis |
-| **Ollama** | Local LLM integration (optional) |
+| **Google Gemini** | Cloud AI provider (production) |
+| **Ollama** | Local LLM integration (offline mode) |
 | **httpx** | Async HTTP client |
 | **joblib** | Model persistence |
 
@@ -190,7 +229,7 @@ The system automatically detects Ollama and uses it when available. Without Olla
 anvikshaka-x/
 ├── backend/                    # FastAPI backend server
 │   ├── agents/                 # AI agent implementations
-│   │   ├── base_agent.py      # Base class with Ollama integration
+│   │   ├── base_agent.py      # Base class with unified AI provider
 │   │   ├── mission_planner.py  # Agent 1: Route & strategy planning
 │   │   ├── risk_analyst.py     # Agent 2: Risk assessment
 │   │   ├── resource_optimizer.py # Agent 3: Asset allocation
@@ -204,6 +243,7 @@ anvikshaka-x/
 │   │   ├── dashboard.py        # Dashboard aggregations
 │   │   ├── chat.py             # AI chat interface
 │   │   └── commander.py        # NLP command parsing
+│   ├── ai_provider.py          # Unified AI provider (Gemini/Ollama/Rule-based)
 │   ├── main.py                 # FastAPI application entry
 │   ├── database.py             # SQLAlchemy setup
 │   ├── models.py               # ORM models (5 tables)
@@ -284,7 +324,7 @@ sequenceDiagram
     participant API as Backend
     participant DB as Database
     participant Agent as AI Agents
-    participant LLM as Ollama
+    participant AIProvider as AI Provider
     participant ML as ML Model
     
     UI->>API: POST /api/mission
@@ -292,8 +332,8 @@ sequenceDiagram
     DB-->>API: mission_id
     
     API->>Agent: Run 5-agent pipeline
-    Agent->>LLM: Request AI narrative (optional)
-    LLM-->>Agent: Enhanced text
+    Agent->>AIProvider: Request AI narrative
+    AIProvider-->>Agent: Enhanced text (or empty if unavailable)
     Agent->>ML: Predict asset failures
     ML-->>Agent: Failure probabilities
     Agent-->>API: Consolidated results
@@ -406,36 +446,113 @@ Training details:
 
 ## Configuration
 
-Environment variables for backend (create `.env` in `backend/` directory):
+The system supports hybrid AI deployment with multiple providers:
+
+### AI Provider Configuration
+
+Environment variables:
 
 ```bash
-# Database (optional, defaults to SQLite)
+# AI Provider Selection
+AI_PROVIDER=auto  # Options: "gemini", "ollama", "auto", "rule-based"
+
+# Gemini Configuration (production/hosted)
+GEMINI_API_KEY=your_api_key_here
+GEMINI_MODEL=gemini-1.5-flash
+
+# Ollama Configuration (local/offline)
+# The ollama-python library uses OLLAMA_HOST for server connection
+OLLAMA_HOST=http://localhost:11434  # Set to custom URL if needed
+OLLAMA_MODEL=llama3
+
+# Database
 DATABASE_URL=sqlite:///./anvikshaka.db
 
-# API Configuration
+# API
 API_HOST=0.0.0.0
 API_PORT=8000
-
-# Ollama (optional)
-OLLAMA_MODEL=llama3
-OLLAMA_BASE_URL=http://localhost:11434
 
 # Logging
 LOG_LEVEL=INFO
 ```
 
-Frontend environment (create `.env` in `frontend/` directory):
+### AI Provider Selection Logic
 
+| Mode | Behavior |
+|------|----------|
+| **auto** (recommended) | 1. Use Gemini if `GEMINI_API_KEY` is set<br>2. Else use Ollama if server is running<br>3. Else use rule-based fallback |
+| **gemini** | Use Google Gemini API (requires API key) |
+| **ollama** | Use local Ollama server (requires Ollama running) |
+| **rule-based** | Disable AI completely, use rule-based logic only |
+
+### Environment Files
+
+**Local Development - Backend** (`.env` in `backend/` directory):
 ```bash
-# Backend API URL
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_key
+
+# Optional: Enable database seeding on startup
+SEED_DATABASE=true
+```
+
+**Local Development - Frontend** (`.env` in `frontend/` directory):
+```bash
 VITE_API_URL=http://localhost:8000/api
 ```
 
+**Production on Vercel:**
+
+All production environment variables must be set in the **Vercel Project Dashboard** under Settings → Environment Variables:
+
+- `AI_PROVIDER=gemini` (required)
+- `GEMINI_API_KEY=<your_actual_key>` (required)
+- `SEED_DATABASE=false` (recommended)
+
+Frontend automatically uses `/api` endpoint via Vercel routing. No `.env.production` file is needed.
+
 ## Deployment
 
-### Backend
+### Vercel Deployment (Recommended)
 
-Docker deployment example:
+ANVIKSHAKA-X is configured for seamless deployment on Vercel with Gemini AI:
+
+#### 1. Prerequisites
+
+- Vercel account
+- Google Gemini API key ([Get one here](https://makersuite.google.com/app/apikey))
+- GitHub repository connected to Vercel
+
+#### 2. Deploy to Vercel
+
+**Via Vercel Dashboard:**
+1. Go to [vercel.com](https://vercel.com) and import your GitHub repository
+2. Framework Preset: **Other** (auto-detected)
+3. Build settings are handled by `vercel.json`
+4. Go to Project Settings → Environment Variables and add:
+   - `AI_PROVIDER` = `gemini`
+   - `GEMINI_API_KEY` = `<your_key_from_google_ai_studio>`
+   - `SEED_DATABASE` = `false`
+5. Deploy
+
+**Via CLI:**
+```bash
+npm install -g vercel
+vercel
+```
+
+Then set environment variables in Vercel dashboard under Project Settings → Environment Variables.
+
+The deployment automatically:
+- Builds the React frontend with Vite
+- Deploys the FastAPI backend as serverless functions
+- Routes `/api/*` requests to the backend
+- Serves frontend static files from root
+- Handles SPA routing (page refresh works correctly on all routes)
+
+### Alternative: Docker Deployment
+
+For self-hosted deployments with Ollama:
 
 ```dockerfile
 FROM python:3.11-slim
@@ -447,30 +564,76 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 COPY ml/ ../ml/
 
+# Set to use Ollama (requires separate Ollama container)
+ENV AI_PROVIDER=ollama
+ENV OLLAMA_HOST=http://ollama:11434
+
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-Production recommendations:
-- Switch to PostgreSQL from SQLite
-- Configure CORS for production domain
-- Set up logging
-- Deploy Ollama separately if using AI features
+Docker Compose with Ollama:
 
-### Frontend
+```yaml
+version: '3.8'
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - AI_PROVIDER=ollama
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+  
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+  
+  frontend:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
 
-```bash
-cd frontend
-npm run build
-# Outputs to frontend/dist/
+volumes:
+  ollama_data:
 ```
 
-Deploy to Vercel, Netlify, AWS S3 + CloudFront, or Nginx.
+### Hybrid Deployment Strategy
 
-Configure production API URL:
-```bash
-VITE_API_URL=https://your-api-domain.com/api
-```
+**Production (Online):**
+- Deploy to Vercel
+- Use Gemini AI (`AI_PROVIDER=gemini`)
+- Set `GEMINI_API_KEY` in Vercel environment variables
+- Database: PostgreSQL (upgrade from SQLite)
+
+**Development (Local):**
+- Run locally with `python main.py`
+- Use Ollama (`AI_PROVIDER=ollama`) or auto mode
+- SQLite database for quick iteration
+
+**Offline/Air-gapped:**
+- Deploy via Docker
+- Use Ollama in offline mode
+- No external API calls required
+
+### Production Recommendations
+
+- Switch to PostgreSQL from SQLite for Vercel deployment
+- Monitor API key usage (Gemini has rate limits)
+- Set up health check monitoring (`/api/health` endpoint)
+- Enable logging to external service (e.g., Datadog, Sentry)
+- Use Vercel environment variables for secrets management
 
 ## Known Limitations
 
@@ -478,7 +641,8 @@ VITE_API_URL=https://your-api-domain.com/api
 |-------|--------|------------|
 | **Dashboard connection beams** misaligned on mobile | Cosmetic | Beams work correctly on desktop (1024px+) |
 | **SQLite concurrent writes** limited | Development only | Use PostgreSQL in production |
-| **Ollama cold start** 5-10 seconds | First LLM call | Warm-up on server startup |
+| **Gemini cold start** Minimal | First API call ~200-800ms | Normal for cloud APIs |
+| **Ollama cold start** 5-10 seconds | First LLM call in local mode | Keep Ollama running |
 | **ML model requires training** | First-time setup | Run training scripts once |
 | **No real-time updates** | Manual refresh needed | Future WebSocket implementation |
 

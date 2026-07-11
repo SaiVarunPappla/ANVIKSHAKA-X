@@ -20,7 +20,7 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 async def chat(payload: ChatRequest):
-    """Process chat message via LLM or fallback rule-based logic."""
+    """Process chat message via AI (Gemini/Ollama) or fallback rule-based logic."""
     system_prompt = (
         "You are ANVIKSHA, an AI military intelligence assistant embedded in the "
         "ANVIKSHAKA-X platform. You help operators analyze missions, interpret risk "
@@ -32,18 +32,19 @@ async def chat(payload: ChatRequest):
     if payload.context:
         user_prompt = f"Context: {payload.context}\n\nQuestion: {payload.message}"
 
-    logger.info(f"[Chat] Checking Ollama availability...")
-    ollama_available = base_agent.is_ollama_available()
-    logger.info(f"[Chat] Ollama available: {ollama_available}")
+    logger.info(f"[Chat] Checking AI provider availability...")
+    ai_available = base_agent.is_ai_available()
+    ai_provider = base_agent.get_ai_provider_name()
+    logger.info(f"[Chat] AI provider: {ai_provider}, available: {ai_available}")
     
-    if ollama_available:
-        logger.info(f"[Chat] Calling LLM for message: {payload.message[:50]}...")
+    if ai_available:
+        logger.info(f"[Chat] Calling AI for message: {payload.message[:50]}...")
         response_text = base_agent.call_llm(system_prompt, user_prompt, max_tokens=80)
-        logger.info(f"[Chat] LLM response length: {len(response_text)} chars")
+        logger.info(f"[Chat] AI response length: {len(response_text)} chars")
         if response_text:
-            return {"response": response_text, "model": "llama3", "ai_powered": True}
+            return {"response": response_text, "model": ai_provider, "ai_powered": True}
         else:
-            logger.warning(f"[Chat] LLM returned empty response, falling back")
+            logger.warning(f"[Chat] AI returned empty response, falling back")
 
     # Fallback logic
     logger.info(f"[Chat] Using fallback logic")
@@ -57,6 +58,6 @@ async def chat(payload: ChatRequest):
     elif "hello" in msg or "hi" in msg:
         resp = "Greetings, Commander. I am ANVIKSHA. State your request."
     else:
-        resp = "I am currently operating in offline mode (Ollama not detected) and my reasoning capabilities are limited. I can still help you navigate mission parameters and basic asset status."
+        resp = "I am currently operating in limited mode without AI assistance. I can still help you navigate mission parameters and basic asset status."
         
-    return {"response": resp, "model": "fallback", "ai_powered": False}
+    return {"response": resp, "model": "rule-based", "ai_powered": False}
