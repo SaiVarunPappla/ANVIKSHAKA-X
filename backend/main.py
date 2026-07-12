@@ -28,16 +28,20 @@ app = FastAPI(title="ANVIKSHAKA-X", version="2.0.0")
 
 # CORS - allow frontend origins
 # For development: http://localhost:5173
-# For production: set via FRONTEND_URL environment variable
+# For production: FRONTEND_URL environment variable
+frontend_url = os.getenv("FRONTEND_URL", "")
 allowed_origins = [
     "http://localhost:5173",  # Local dev
     "http://localhost:3000",  # Alternative local dev
+    "https://anvikshaka-x-frontend.vercel.app",  # Production frontend
 ]
 
-# Add production frontend URL if configured
-frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url:
+# Add custom frontend URL if provided
+if frontend_url and frontend_url not in allowed_origins:
     allowed_origins.append(frontend_url)
+    logger.info(f"[CORS] Added custom frontend URL: {frontend_url}")
+
+logger.info(f"[CORS] Allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
