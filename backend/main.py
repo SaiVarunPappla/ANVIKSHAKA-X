@@ -87,6 +87,8 @@ async def root():
 @app.get("/api/health")
 async def health():
     """Health check endpoint with database connectivity test."""
+    from sqlalchemy import text
+    
     health_status = {
         "status": "healthy", 
         "timestamp": datetime.utcnow().isoformat(),
@@ -106,8 +108,8 @@ async def health():
     # Test database connectivity
     try:
         db = SessionLocal()
-        # Simple query to verify DB is working
-        db.execute("SELECT 1")
+        # SQLAlchemy 2.x requires text() wrapper for raw SQL
+        db.execute(text("SELECT 1"))
         db.close()
         health_status["database"] = "connected"
     except Exception as e:
