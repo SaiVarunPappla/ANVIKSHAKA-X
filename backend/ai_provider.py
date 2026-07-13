@@ -9,10 +9,12 @@ Unified AI provider interface supporting multiple backends:
 Environment Configuration:
 - AI_PROVIDER: "gemini", "ollama", "auto", or "rule-based" (default: "auto")
 - GEMINI_API_KEY: API key for Google Gemini (REQUIRED for AI features)
-- GEMINI_MODEL: Model name (default: "gemini-pro")
-  * Use "gemini-pro" for stable production (recommended)
-  * Other supported models depend on your API version/region
-  * Avoid "-latest" suffix models as they may not be available in all regions
+- GEMINI_MODEL: Model name (default: "gemini-1.5-flash")
+  * For google-generativeai v0.8.3:
+  * Use "gemini-1.5-flash" (fast, recommended)
+  * Use "gemini-1.5-pro" (more capable)
+  * Use "gemini-pro" (stable legacy model)
+  * DO NOT use "-latest" suffix with this SDK version
 - OLLAMA_HOST: Ollama server URL (used by ollama-python library, default: "http://localhost:11434")
 - OLLAMA_MODEL: Ollama model name (default: "llama3")
 """
@@ -72,9 +74,9 @@ class AIProvider:
         """Initialize AI provider based on environment configuration."""
         self.provider_type = os.getenv("AI_PROVIDER", "auto").lower()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        # Default to gemini-pro for production stability
-        # gemini-pro is the stable production model supported in google-generativeai SDK
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-pro")
+        # For google-generativeai v0.8.3, use gemini-1.5-flash (without -latest suffix)
+        # Model options: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
         
         # Log configuration at startup
@@ -85,9 +87,9 @@ class AIProvider:
         if self.gemini_api_key and GEMINI_AVAILABLE:
             try:
                 genai.configure(api_key=self.gemini_api_key)
-                logger.info(f"[AI] Gemini configured successfully with model: {self.gemini_model}")
+                logger.info(f"[AI] Gemini SDK configured successfully")
             except Exception as e:
-                logger.error(f"[AI] Failed to configure Gemini: {type(e).__name__}: {e}")
+                logger.error(f"[AI] Failed to configure Gemini SDK: {type(e).__name__}: {e}")
         elif not self.gemini_api_key:
             logger.warning("[AI] GEMINI_API_KEY not set - Gemini will not be available")
         elif not GEMINI_AVAILABLE:
@@ -145,9 +147,11 @@ class AIProvider:
     def _check_gemini(self) -> bool:
         """Check if Gemini is available and configured."""
         if not GEMINI_AVAILABLE:
+            logger.debug("[AI] Gemini library not available")
             return False
         
         if not self.gemini_api_key:
+            logger.debug("[AI] Gemini API key not set")
             return False
         
         # Check cache
@@ -156,14 +160,15 @@ class AIProvider:
             now - AIProvider._cache["checked_at"] < AIProvider._CACHE_TTL):
             return AIProvider._cache["gemini_available"]
         
-        # Quick validation - just check if we can create a model instance
+        # Don't try to validate the model during check - just verify SDK is configured
+        # Model validation happens during actual API call
         try:
-            genai.GenerativeModel(self.gemini_model)
+            # Simple check - if we have API key and SDK is imported, consider it available
             AIProvider._cache["gemini_available"] = True
-            logger.debug("[AI] Gemini is available")
+            logger.debug("[AI] Gemini is available (API key present, SDK configured)")
             return True
         except Exception as e:
-            logger.debug(f"[AI] Gemini not available: {e}")
+            logger.debug(f"[AI] Gemini check failed: {e}")
             AIProvider._cache["gemini_available"] = False
             return False
     

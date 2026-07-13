@@ -88,8 +88,9 @@ async def run_maintenance(payload: MaintenanceRequest, db: Session = Depends(get
     assets_db = query.all()
 
     if not assets_db:
-        logger.warning("[Maintenance] No assets found in database")
-        raise HTTPException(status_code=404, detail="No assets found.")
+        logger.warning("[Maintenance] No assets found in database - returning empty results")
+        # Return empty list instead of 404 - this is valid (just no assets to analyze)
+        return []
 
     logger.info(f"[Maintenance] Found {len(assets_db)} assets to analyze")
     
