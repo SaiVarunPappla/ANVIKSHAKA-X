@@ -78,14 +78,21 @@ async def list_predictions(db: Session = Depends(get_db)):
 @router.post("/maintenance", response_model=List[MaintenancePredictionResponse])
 async def run_maintenance(payload: MaintenanceRequest, db: Session = Depends(get_db)):
     """Run the ML-based predictive maintenance for all or selected assets."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[Maintenance] POST /api/maintenance called with payload: {payload}")
+    
     query = db.query(Asset)
     if payload.asset_ids:
         query = query.filter(Asset.id.in_(payload.asset_ids))
     assets_db = query.all()
 
     if not assets_db:
+        logger.warning("[Maintenance] No assets found in database")
         raise HTTPException(status_code=404, detail="No assets found.")
 
+    logger.info(f"[Maintenance] Found {len(assets_db)} assets to analyze")
+    
     asset_list = [
         {
             "name": a.name,
@@ -98,8 +105,10 @@ async def run_maintenance(payload: MaintenanceRequest, db: Session = Depends(get
         for a in assets_db
     ]
 
+    logger.info("[Maintenance] Running maintenance agent...")
     result = _maint_agent.run({"assets": asset_list})
     predictions = result["predictions"]
+    logger.info(f"[Maintenance] Agent returned {len(predictions)} predictions")
 
     # Persist predictions
     response = []
@@ -124,4 +133,5 @@ async def run_maintenance(payload: MaintenanceRequest, db: Session = Depends(get
             asset_type=asset.asset_type,
         ))
 
+    logger.info(f"[Maintenance] Returning {len(response)} prediction responses")
     return response

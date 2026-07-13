@@ -231,13 +231,16 @@ class AIProvider:
     def _call_gemini(self, system_prompt: str, user_prompt: str, max_tokens: Optional[int] = None) -> str:
         """Call Google Gemini API."""
         try:
-            logger.info(f"[AI/Gemini] Calling model '{self.gemini_model}' with prompt length: {len(user_prompt)} chars")
+            logger.info(f"[AI/Gemini] Attempting call with model: '{self.gemini_model}'")
+            logger.info(f"[AI/Gemini] Prompt length: {len(user_prompt)} chars, max_tokens: {max_tokens}")
             
             # Create model instance
+            # Note: google-generativeai v0.8.3 accepts model names with or without 'models/' prefix
             model = genai.GenerativeModel(
                 model_name=self.gemini_model,
                 system_instruction=system_prompt
             )
+            logger.info(f"[AI/Gemini] Model instance created successfully")
             
             # Configure generation
             generation_config = {}
@@ -245,17 +248,23 @@ class AIProvider:
                 generation_config["max_output_tokens"] = max_tokens
             
             # Generate response
+            logger.info(f"[AI/Gemini] Calling generate_content...")
             response = model.generate_content(
                 user_prompt,
                 generation_config=generation_config if generation_config else None
             )
             
             content = response.text.strip()
-            logger.info(f"[AI/Gemini] Response received: {len(content)} chars")
+            logger.info(f"[AI/Gemini] SUCCESS - Response received: {len(content)} chars")
             return content
             
         except Exception as e:
-            logger.error(f"[AI/Gemini] Call failed: {type(e).__name__}: {str(e)}")
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"[AI/Gemini] FAILED - {error_type}: {error_msg}")
+            logger.error(f"[AI/Gemini] Model attempted: '{self.gemini_model}'")
+            logger.error(f"[AI/Gemini] API key present: {bool(self.gemini_api_key)}")
+            
             # Invalidate cache on failure
             AIProvider._cache["gemini_available"] = False
             AIProvider._cache["checked_at"] = 0

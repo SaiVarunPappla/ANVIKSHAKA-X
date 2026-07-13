@@ -103,6 +103,19 @@ async def startup_init():
 async def root():
     return {"system": "ANVIKSHAKA-X", "status": "online", "version": "2.0.0"}
 
+@app.get("/api/routes")
+async def list_routes():
+    """Debug endpoint to list all registered routes."""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, "methods") and hasattr(route, "path"):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods),
+                "name": route.name
+            })
+    return {"routes": sorted(routes, key=lambda x: x["path"])}
+
 @app.get("/api/health")
 async def health():
     """Health check endpoint with database connectivity test."""
