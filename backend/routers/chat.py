@@ -32,32 +32,46 @@ async def chat(payload: ChatRequest):
     if payload.context:
         user_prompt = f"Context: {payload.context}\n\nQuestion: {payload.message}"
 
-    logger.info(f"[Chat] Checking AI provider availability...")
+    logger.info(f"[Chat] Received message: {payload.message[:50]}...")
     ai_available = base_agent.is_ai_available()
     ai_provider = base_agent.get_ai_provider_name()
     logger.info(f"[Chat] AI provider: {ai_provider}, available: {ai_available}")
     
     if ai_available:
-        logger.info(f"[Chat] Calling AI for message: {payload.message[:50]}...")
-        response_text = base_agent.call_llm(system_prompt, user_prompt, max_tokens=80)
-        logger.info(f"[Chat] AI response length: {len(response_text)} chars")
+        logger.info(f"[Chat] Calling AI provider: {ai_provider}")
+        response_text = base_agent.call_llm(system_prompt, user_prompt, max_tokens=200)
+        
         if response_text:
-            return {"response": response_text, "model": ai_provider, "ai_powered": True}
+            logger.info(f"[Chat] AI response success: {len(response_text)} chars")
+            return {
+                "response": response_text, 
+                "model": ai_provider, 
+                "ai_powered": True,
+                "fallback_reason": None
+            }
         else:
-            logger.warning(f"[Chat] AI returned empty response, falling back")
+            logger.warning(f"[Chat] AI provider '{ai_provider}' returned empty response")
+            fallback_reason = f"AI provider '{ai_provider}' returned empty response"
+    else:
+        fallback_reason = f"AI provider '{ai_provider}' is not available"
+        logger.info(f"[Chat] {fallback_reason}, using rule-based fallback")
 
     # Fallback logic
-    logger.info(f"[Chat] Using fallback logic")
     msg = payload.message.lower()
     if "risk" in msg:
         resp = "Risk is calculated based on threat level, weather, and duration. High threat and severe weather significantly increase the risk score. Check the Risk Dashboard for detailed breakdowns."
     elif "maintenance" in msg or "asset" in msg:
-        resp = "Asset health is monitored via our RandomForest ML model. AUV 2 currently has critical battery degradation. I recommend immediate maintenance before deploying it."
+        resp = "Asset health is monitored via our RandomForest ML model. Check the Maintenance page to run predictive analysis on all assets."
     elif "mission" in msg:
-        resp = "Missions are planned via the 5-agent pipeline. You can create one from the Mission Planner or use the Natural Language Commander below."
-    elif "hello" in msg or "hi" in msg:
-        resp = "Greetings, Commander. I am ANVIKSHA. State your request."
+        resp = "Missions are planned via the 5-agent pipeline. You can create one from the Mission Planner or use the Natural Language Commander."
+    elif "hello" in msg or "hi" in msg or "hey" in msg:
+        resp = "Greetings, Commander. I am ANVIKSHA, your AI assistant. How may I assist you today?"
     else:
-        resp = "I am currently operating in limited mode without AI assistance. I can still help you navigate mission parameters and basic asset status."
-        
-    return {"response": resp, "model": "rule-based", "ai_powered": False}
+        resp = "I am currently operating in limited mode. I can still help you navigate mission parameters and basic asset status. Try asking about missions, risk, or maintenance."
+    
+    return {
+        "response": resp, 
+        "model": "rule-based", 
+        "ai_powered": False,
+        "fallback_reason": fallback_reason if 'fallback_reason' in locals() else "AI not configured"
+    }

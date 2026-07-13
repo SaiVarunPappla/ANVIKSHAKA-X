@@ -9,7 +9,10 @@ Unified AI provider interface supporting multiple backends:
 Environment Configuration:
 - AI_PROVIDER: "gemini", "ollama", "auto", or "rule-based" (default: "auto")
 - GEMINI_API_KEY: API key for Google Gemini
-- GEMINI_MODEL: Model name (default: "gemini-1.5-flash")
+- GEMINI_MODEL: Model name (default: "gemini-1.5-flash-latest")
+  * Use "gemini-1.5-flash-latest" for v1beta API compatibility
+  * Other options: "gemini-1.5-pro-latest", "gemini-2.0-flash-exp"
+  * DO NOT use "gemini-1.5-flash" (not supported in v1beta)
 - OLLAMA_HOST: Ollama server URL (used by ollama-python library, default: "http://localhost:11434")
 - OLLAMA_MODEL: Ollama model name (default: "llama3")
 """
@@ -69,7 +72,9 @@ class AIProvider:
         """Initialize AI provider based on environment configuration."""
         self.provider_type = os.getenv("AI_PROVIDER", "auto").lower()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # Use gemini-1.5-flash-latest for production compatibility with v1beta API
+        # Original gemini-1.5-flash is not supported in v1beta
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
         
         # Initialize Gemini if configured
@@ -218,7 +223,7 @@ class AIProvider:
     def _call_gemini(self, system_prompt: str, user_prompt: str, max_tokens: Optional[int] = None) -> str:
         """Call Google Gemini API."""
         try:
-            logger.info(f"[AI/Gemini] Calling with prompt length: {len(user_prompt)} chars")
+            logger.info(f"[AI/Gemini] Calling model '{self.gemini_model}' with prompt length: {len(user_prompt)} chars")
             
             # Create model instance
             model = genai.GenerativeModel(
@@ -238,11 +243,11 @@ class AIProvider:
             )
             
             content = response.text.strip()
-            logger.info(f"[AI/Gemini] Response length: {len(content)} chars")
+            logger.info(f"[AI/Gemini] Response received: {len(content)} chars")
             return content
             
         except Exception as e:
-            logger.warning(f"[AI/Gemini] Call failed: {e}")
+            logger.error(f"[AI/Gemini] Call failed: {type(e).__name__}: {str(e)}")
             # Invalidate cache on failure
             AIProvider._cache["gemini_available"] = False
             AIProvider._cache["checked_at"] = 0
@@ -256,7 +261,7 @@ class AIProvider:
         Set OLLAMA_HOST=http://custom:port if not using default localhost:11434.
         """
         try:
-            logger.info(f"[AI/Ollama] Calling with prompt length: {len(user_prompt)} chars")
+            logger.info(f"[AI/Ollama] Calling model '{self.ollama_model}' with prompt length: {len(user_prompt)} chars")
             
             # Build options dict
             options = {"keep_alive": "5m"}
@@ -273,11 +278,11 @@ class AIProvider:
             )
             
             content = response.get("message", {}).get("content", "").strip()
-            logger.info(f"[AI/Ollama] Response length: {len(content)} chars")
+            logger.info(f"[AI/Ollama] Response received: {len(content)} chars")
             return content
             
         except Exception as e:
-            logger.warning(f"[AI/Ollama] Call failed: {e}")
+            logger.error(f"[AI/Ollama] Call failed: {type(e).__name__}: {str(e)}")
             # Invalidate cache on failure
             AIProvider._cache["ollama_available"] = False
             AIProvider._cache["checked_at"] = 0

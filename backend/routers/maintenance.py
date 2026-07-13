@@ -2,12 +2,14 @@
 maintenance.py
 --------------
 POST /api/maintenance  → run predictive maintenance for all (or selected) assets
+GET  /api/maintenance/predictions → list recent predictions
 GET  /api/assets       → list all assets
 """
 
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List
 
 from database import get_db
@@ -25,6 +27,49 @@ _maint_agent = MaintenanceAnalystAgent()
 @router.get("/assets", response_model=List[AssetResponse])
 async def list_assets(db: Session = Depends(get_db)):
     return db.query(Asset).order_by(Asset.id).all()
+
+
+# ====================================================================
+# GET /api/maintenance/predictions — list recent predictions
+# ====================================================================
+@router.get("/maintenance/predictions", response_model=List[MaintenancePredictionResponse])
+async def list_predictions(db: Session = Depends(get_db)):
+    """Get the most recent maintenance predictions for all assets."""
+    # Get the latest prediction for each asset
+    subquery = (
+        db.query(
+            MaintenancePrediction.asset_id,
+            func.max(MaintenancePrediction.predicted_at).label('max_predicted_at')
+        )
+        .group_by(MaintenancePrediction.asset_id)
+        .subquery()
+    )
+    
+    predictions = (
+        db.query(MaintenancePrediction)
+        .join(
+            subquery,
+            (MaintenancePrediction.asset_id == subquery.c.asset_id) &
+            (MaintenancePrediction.predicted_at == subquery.c.max_predicted_at)
+        )
+        .join(Asset, MaintenancePrediction.asset_id == Asset.id)
+        .all()
+    )
+    
+    response = []
+    for mp in predictions:
+        asset = db.query(Asset).filter(Asset.id == mp.asset_id).first()
+        response.append(MaintenancePredictionResponse(
+            id=mp.id,
+            asset_id=mp.asset_id,
+            failure_probability=mp.failure_probability,
+            risk_level=mp.risk_level,
+            recommended_action=mp.recommended_action,
+            asset_name=asset.name if asset else "Unknown",
+            asset_type=asset.asset_type if asset else "Unknown",
+        ))
+    
+    return response
 
 
 # ====================================================================

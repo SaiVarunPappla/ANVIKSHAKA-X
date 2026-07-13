@@ -120,21 +120,94 @@ async def health():
     
     return health_status
 
+@app.post("/api/seed")
+async def trigger_seed():
+    """Manually trigger database seeding (for production setup)."""
+    try:
+        seed_database()
+        return {
+            "status": "success",
+            "message": "Database seeded with sample data",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"[Seed] Failed to seed database: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
 def seed_database():
     """Seed database with sample data (idempotent)."""
     db = SessionLocal()
     try:
+        # Seed assets
         if db.query(Asset).count() == 0:
             sample_assets = [
-                Asset(name="Drone A", asset_type="drone", battery_health=85.0, operating_hours=120, mission_count=18, status="active"),
-                Asset(name="Drone B", asset_type="drone", battery_health=62.0, operating_hours=280, mission_count=35, status="active"),
-                Asset(name="Drone C", asset_type="drone", battery_health=91.0, operating_hours=55, mission_count=8, status="active"),
-                Asset(name="AUV 1", asset_type="auv", battery_health=78.0, operating_hours=190, mission_count=22, status="active"),
-                Asset(name="AUV 2", asset_type="auv", battery_health=45.0, operating_hours=350, mission_count=47, status="maintenance"),
+                Asset(name="Drone Alpha", asset_type="drone", battery_health=85.0, operating_hours=120, mission_count=18, status="active"),
+                Asset(name="Drone Bravo", asset_type="drone", battery_health=62.0, operating_hours=280, mission_count=35, status="active"),
+                Asset(name="Drone Charlie", asset_type="drone", battery_health=91.0, operating_hours=55, mission_count=8, status="active"),
+                Asset(name="AUV-01 Neptune", asset_type="auv", battery_health=78.0, operating_hours=190, mission_count=22, status="active"),
+                Asset(name="AUV-02 Poseidon", asset_type="auv", battery_health=45.0, operating_hours=350, mission_count=47, status="maintenance"),
+                Asset(name="Torpedo T-90", asset_type="torpedo", battery_health=100.0, operating_hours=5, mission_count=2, status="active"),
+                Asset(name="Launcher VLS-01", asset_type="launcher", battery_health=95.0, operating_hours=80, mission_count=12, status="active"),
             ]
             db.add_all(sample_assets)
             db.commit()
-            logger.info("[SEED] 5 sample assets inserted.")
+            logger.info("[SEED] 7 sample assets inserted.")
+        
+        # Seed sample missions
+        if db.query(Mission).count() == 0:
+            from datetime import datetime, timedelta
+            sample_missions = [
+                Mission(
+                    name="Operation Sea Hawk",
+                    mission_type="Reconnaissance",
+                    duration_hours=6,
+                    threat_level="medium",
+                    weather="moderate",
+                    num_drones=2,
+                    num_auvs=1,
+                    num_torpedoes=0,
+                    num_launchers=0,
+                    status="completed",
+                    created_at=datetime.utcnow() - timedelta(days=3)
+                ),
+                Mission(
+                    name="Coastal Patrol Alpha",
+                    mission_type="Patrol",
+                    duration_hours=12,
+                    threat_level="low",
+                    weather="calm",
+                    num_drones=3,
+                    num_auvs=1,
+                    num_torpedoes=0,
+                    num_launchers=0,
+                    status="active",
+                    created_at=datetime.utcnow() - timedelta(days=1)
+                ),
+                Mission(
+                    name="Strike Mission Delta",
+                    mission_type="Strike",
+                    duration_hours=4,
+                    threat_level="high",
+                    weather="severe",
+                    num_drones=1,
+                    num_auvs=0,
+                    num_torpedoes=2,
+                    num_launchers=1,
+                    status="planned",
+                    created_at=datetime.utcnow() - timedelta(hours=6)
+                ),
+            ]
+            db.add_all(sample_missions)
+            db.commit()
+            logger.info("[SEED] 3 sample missions inserted.")
+            
+    except Exception as e:
+        logger.error(f"[SEED] Failed to seed database: {e}")
+        db.rollback()
     finally:
         db.close()
 
