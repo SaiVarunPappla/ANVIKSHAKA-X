@@ -62,15 +62,23 @@ app.include_router(commander.router)
 async def startup_init():
     """Initialize on startup - serverless compatible."""
     logger.info("[Startup] ANVIKSHAKA-X backend initializing...")
+    logger.info(f"[Startup] Database URL prefix: {os.getenv('DATABASE_URL', 'sqlite:///./anvikshaka.db')[:30]}")
+    
     # Create tables if they don't exist (idempotent)
     try:
+        logger.info("[Startup] Creating database tables...")
         Base.metadata.create_all(bind=engine)
+        logger.info("[Startup] Database tables created successfully")
+        
         # Only seed if explicitly enabled (avoid on serverless cold starts)
         if os.getenv("SEED_DATABASE", "false").lower() == "true":
             seed_database()
             logger.info("[Startup] Database seeded")
+        else:
+            logger.info("[Startup] Database seeding disabled (SEED_DATABASE not set)")
     except Exception as e:
-        logger.warning(f"[Startup] Initialization failed: {e}")
+        logger.error(f"[Startup] Initialization failed: {e}", exc_info=True)
+        # Don't crash the app - let individual endpoints handle DB errors
 
 @app.get("/")
 async def root():
@@ -78,16 +86,37 @@ async def root():
 
 @app.get("/api/health")
 async def health():
-    base_agent = BaseAgent()
-    ai_available = base_agent.is_ai_available()
-    ai_provider = base_agent.get_ai_provider_name()
-    
-    return {
+    """Health check endpoint with database connectivity test."""
+    health_status = {
         "status": "healthy", 
         "timestamp": datetime.utcnow().isoformat(),
-        "ai_provider": ai_provider,
-        "ai_available": ai_available
     }
+    
+    # Test AI provider
+    try:
+        base_agent = BaseAgent()
+        health_status["ai_provider"] = base_agent.get_ai_provider_name()
+        health_status["ai_available"] = base_agent.is_ai_available()
+    except Exception as e:
+        logger.error(f"[Health] AI provider check failed: {e}")
+        health_status["ai_provider"] = "error"
+        health_status["ai_available"] = False
+        health_status["ai_error"] = str(e)
+    
+    # Test database connectivity
+    try:
+        db = SessionLocal()
+        # Simple query to verify DB is working
+        db.execute("SELECT 1")
+        db.close()
+        health_status["database"] = "connected"
+    except Exception as e:
+        logger.error(f"[Health] Database check failed: {e}")
+        health_status["database"] = "error"
+        health_status["database_error"] = str(e)
+        health_status["status"] = "degraded"
+    
+    return health_status
 
 def seed_database():
     """Seed database with sample data (idempotent)."""
