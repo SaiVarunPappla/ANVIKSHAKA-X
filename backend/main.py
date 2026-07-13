@@ -61,8 +61,23 @@ app.include_router(commander.router)
 @app.on_event("startup")
 async def startup_init():
     """Initialize on startup - serverless compatible."""
+    logger.info("[Startup] ========================================")
     logger.info("[Startup] ANVIKSHAKA-X backend initializing...")
+    logger.info("[Startup] ========================================")
     logger.info(f"[Startup] Database URL prefix: {os.getenv('DATABASE_URL', 'sqlite:///./anvikshaka.db')[:30]}")
+    
+    # Log AI configuration
+    logger.info(f"[Startup] AI_PROVIDER: {os.getenv('AI_PROVIDER', 'auto')}")
+    logger.info(f"[Startup] GEMINI_API_KEY present: {bool(os.getenv('GEMINI_API_KEY'))}")
+    logger.info(f"[Startup] GEMINI_MODEL: {os.getenv('GEMINI_MODEL', 'gemini-pro')}")
+    
+    # Initialize AI provider to trigger configuration logging
+    try:
+        base_agent = BaseAgent()
+        logger.info(f"[Startup] Active AI provider: {base_agent.get_ai_provider_name()}")
+        logger.info(f"[Startup] AI available: {base_agent.is_ai_available()}")
+    except Exception as e:
+        logger.error(f"[Startup] AI initialization failed: {e}")
     
     # Create tables if they don't exist (idempotent)
     try:
@@ -79,6 +94,10 @@ async def startup_init():
     except Exception as e:
         logger.error(f"[Startup] Initialization failed: {e}", exc_info=True)
         # Don't crash the app - let individual endpoints handle DB errors
+    
+    logger.info("[Startup] ========================================")
+    logger.info("[Startup] Initialization complete")
+    logger.info("[Startup] ========================================")
 
 @app.get("/")
 async def root():

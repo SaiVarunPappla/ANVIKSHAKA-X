@@ -8,11 +8,11 @@ Unified AI provider interface supporting multiple backends:
 
 Environment Configuration:
 - AI_PROVIDER: "gemini", "ollama", "auto", or "rule-based" (default: "auto")
-- GEMINI_API_KEY: API key for Google Gemini
-- GEMINI_MODEL: Model name (default: "gemini-1.5-flash-latest")
-  * Use "gemini-1.5-flash-latest" for v1beta API compatibility
-  * Other options: "gemini-1.5-pro-latest", "gemini-2.0-flash-exp"
-  * DO NOT use "gemini-1.5-flash" (not supported in v1beta)
+- GEMINI_API_KEY: API key for Google Gemini (REQUIRED for AI features)
+- GEMINI_MODEL: Model name (default: "gemini-pro")
+  * Use "gemini-pro" for stable production (recommended)
+  * Other supported models depend on your API version/region
+  * Avoid "-latest" suffix models as they may not be available in all regions
 - OLLAMA_HOST: Ollama server URL (used by ollama-python library, default: "http://localhost:11434")
 - OLLAMA_MODEL: Ollama model name (default: "llama3")
 """
@@ -72,18 +72,26 @@ class AIProvider:
         """Initialize AI provider based on environment configuration."""
         self.provider_type = os.getenv("AI_PROVIDER", "auto").lower()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        # Use gemini-1.5-flash-latest for production compatibility with v1beta API
-        # Original gemini-1.5-flash is not supported in v1beta
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
+        # Default to gemini-pro for production stability
+        # gemini-pro is the stable production model supported in google-generativeai SDK
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-pro")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
+        
+        # Log configuration at startup
+        logger.info(f"[AI] Configuration: provider_type={self.provider_type}, gemini_model={self.gemini_model}")
+        logger.info(f"[AI] GEMINI_API_KEY present: {bool(self.gemini_api_key)}")
         
         # Initialize Gemini if configured
         if self.gemini_api_key and GEMINI_AVAILABLE:
             try:
                 genai.configure(api_key=self.gemini_api_key)
-                logger.info(f"[AI] Gemini configured with model: {self.gemini_model}")
+                logger.info(f"[AI] Gemini configured successfully with model: {self.gemini_model}")
             except Exception as e:
-                logger.warning(f"[AI] Failed to configure Gemini: {e}")
+                logger.error(f"[AI] Failed to configure Gemini: {type(e).__name__}: {e}")
+        elif not self.gemini_api_key:
+            logger.warning("[AI] GEMINI_API_KEY not set - Gemini will not be available")
+        elif not GEMINI_AVAILABLE:
+            logger.warning("[AI] google-generativeai library not installed")
         
         self._active_provider = None
         self._select_provider()
