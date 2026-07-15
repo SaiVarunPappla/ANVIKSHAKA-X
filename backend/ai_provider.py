@@ -9,12 +9,10 @@ Unified AI provider interface supporting multiple backends:
 Environment Configuration:
 - AI_PROVIDER: "gemini", "ollama", "auto", or "rule-based" (default: "auto")
 - GEMINI_API_KEY: API key for Google Gemini (REQUIRED for AI features)
-- GEMINI_MODEL: Model name (default: "gemini-1.5-flash")
-  * For google-generativeai v0.8.3:
-  * Use "gemini-1.5-flash" (fast, recommended)
-  * Use "gemini-1.5-pro" (more capable)
-  * Use "gemini-pro" (stable legacy model)
-  * DO NOT use "-latest" suffix with this SDK version
+- GEMINI_MODEL: Model name (default: "models/gemini-1.5-flash")
+  * IMPORTANT: Use "models/gemini-1.5-flash" or "models/gemini-1.5-pro" with google-generativeai v0.8.3
+  * The "models/" prefix is REQUIRED for this SDK version
+  * Without prefix, you'll get 404 model not found errors
 - OLLAMA_HOST: Ollama server URL (used by ollama-python library, default: "http://localhost:11434")
 - OLLAMA_MODEL: Ollama model name (default: "llama3")
 """
@@ -74,29 +72,34 @@ class AIProvider:
         """Initialize AI provider based on environment configuration."""
         self.provider_type = os.getenv("AI_PROVIDER", "auto").lower()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        # For google-generativeai v0.8.3, use gemini-1.5-flash (without -latest suffix)
-        # Model options: gemini-1.5-flash, gemini-1.5-pro, gemini-pro
-        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # CRITICAL: Must use "models/" prefix with google-generativeai v0.8.3
+        # Without prefix: 404 model not found error
+        # With prefix: Works correctly
+        self.gemini_model = os.getenv("GEMINI_MODEL", "models/gemini-1.5-flash")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
         
         # Log configuration at startup
-        logger.info(f"[AI] Configuration: provider_type={self.provider_type}, gemini_model={self.gemini_model}")
+        logger.info(f"[AI] ==================== AI PROVIDER INITIALIZATION ====================")
+        logger.info(f"[AI] Provider type: {self.provider_type}")
+        logger.info(f"[AI] Gemini model: {self.gemini_model}")
         logger.info(f"[AI] GEMINI_API_KEY present: {bool(self.gemini_api_key)}")
+        logger.info(f"[AI] GEMINI_AVAILABLE (SDK imported): {GEMINI_AVAILABLE}")
         
         # Initialize Gemini if configured
         if self.gemini_api_key and GEMINI_AVAILABLE:
             try:
                 genai.configure(api_key=self.gemini_api_key)
-                logger.info(f"[AI] Gemini SDK configured successfully")
+                logger.info(f"[AI] ✓ Gemini SDK configured successfully")
             except Exception as e:
-                logger.error(f"[AI] Failed to configure Gemini SDK: {type(e).__name__}: {e}")
+                logger.error(f"[AI] ✗ Failed to configure Gemini SDK: {type(e).__name__}: {e}")
         elif not self.gemini_api_key:
-            logger.warning("[AI] GEMINI_API_KEY not set - Gemini will not be available")
+            logger.warning("[AI] ⚠ GEMINI_API_KEY not set - Gemini will not be available")
         elif not GEMINI_AVAILABLE:
-            logger.warning("[AI] google-generativeai library not installed")
+            logger.warning("[AI] ⚠ google-generativeai library not installed")
         
         self._active_provider = None
         self._select_provider()
+        logger.info(f"[AI] ======================================================================")
     
     def _select_provider(self) -> str:
         """
