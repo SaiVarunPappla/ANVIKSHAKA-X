@@ -36,7 +36,8 @@ async def chat(payload: ChatRequest):
     logger.info(f"[Chat] Received message: {payload.message[:50]}...")
     ai_available = base_agent.is_ai_available()
     ai_provider = base_agent.get_ai_provider_name()
-    logger.info(f"[Chat] AI provider: {ai_provider}, available: {ai_available}")
+    ai_model = base_agent.ai_provider.get_selected_model() if hasattr(base_agent.ai_provider, 'get_selected_model') else None
+    logger.info(f"[Chat] AI provider: {ai_provider}, available: {ai_available}, model: {ai_model}")
     logger.info(f"[Chat] API key present: {bool(os.getenv('GEMINI_API_KEY'))}")
     
     fallback_reason = None
@@ -49,7 +50,7 @@ async def chat(payload: ChatRequest):
             logger.info(f"[Chat] AI response success: {len(response_text)} chars")
             return {
                 "response": response_text, 
-                "model": ai_provider, 
+                "model": ai_model or ai_provider, 
                 "ai_powered": True,
                 "provider": ai_provider,
                 "fallback_reason": None

@@ -129,8 +129,11 @@ async def health():
     # Test AI provider
     try:
         base_agent = BaseAgent()
+        ai_provider = base_agent.ai_provider
         health_status["ai_provider"] = base_agent.get_ai_provider_name()
         health_status["ai_available"] = base_agent.is_ai_available()
+        health_status["ai_model"] = ai_provider.get_selected_model() if hasattr(ai_provider, 'get_selected_model') else None
+        health_status["ai_available_models"] = [m["name"] for m in ai_provider.get_available_models()] if hasattr(ai_provider, 'get_available_models') else []
     except Exception as e:
         logger.error(f"[Health] AI provider check failed: {e}")
         health_status["ai_provider"] = "error"
