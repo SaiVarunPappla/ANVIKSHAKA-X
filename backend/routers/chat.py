@@ -43,7 +43,7 @@ async def chat(payload: ChatRequest):
     fallback_reason = None
     
     if ai_available:
-        logger.info(f"[Chat] Calling AI provider: {ai_provider}")
+        logger.info(f"[Chat] Calling AI provider: {ai_provider} with model: {ai_model}")
         response_text = base_agent.call_llm(system_prompt, user_prompt, max_tokens=200)
         
         if response_text:
@@ -57,9 +57,9 @@ async def chat(payload: ChatRequest):
             }
         else:
             logger.warning(f"[Chat] AI provider '{ai_provider}' returned empty response")
-            fallback_reason = f"AI provider '{ai_provider}' returned empty response"
+            fallback_reason = f"AI provider '{ai_provider}' with model '{ai_model}' returned empty response"
     else:
-        fallback_reason = f"AI provider '{ai_provider}' is not available"
+        fallback_reason = f"AI provider '{ai_provider}' is not available (no API key or initialization failed)"
         logger.info(f"[Chat] {fallback_reason}, using rule-based fallback")
 
     # Fallback logic

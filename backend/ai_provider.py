@@ -2,14 +2,14 @@
 ai_provider.py
 --------------
 Unified AI provider interface supporting multiple backends:
-- Gemini (Google AI) for production/hosted deployments with auto-discovery
+- Gemini (Google AI) for production/hosted deployments
 - Ollama for local/offline deployments
 - Rule-based fallback when no AI is available
 
 Environment Configuration:
 - AI_PROVIDER: "gemini", "ollama", "auto", or "rule-based" (default: "auto")
 - GEMINI_API_KEY: API key for Google Gemini (REQUIRED for AI features)
-- GEMINI_MODEL: Optional model name override (auto-selects if not set)
+- GEMINI_MODEL: Optional model name override (default: "gemini-1.5-flash")
 - OLLAMA_HOST: Ollama server URL (default: "http://localhost:11434")
 - OLLAMA_MODEL: Ollama model name (default: "llama3")
 """
@@ -21,6 +21,9 @@ from typing import Optional
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+# Default stable model - known to be widely available
+DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
 
 # Try importing providers
 try:
@@ -48,10 +51,10 @@ class AIProviderType(str, Enum):
 
 class AIProvider:
     """
-    Unified AI provider with auto-discovery and graceful fallback.
+    Unified AI provider with simple, robust Gemini integration.
     
     Selection logic when AI_PROVIDER="auto":
-    1. If GEMINI_API_KEY is set and Gemini models discovered → use Gemini
+    1. If GEMINI_API_KEY is set and Gemini is available → use Gemini
     2. Else if Ollama is running locally → use Ollama
     3. Else → use rule-based fallback (no AI)
     """
@@ -66,42 +69,28 @@ class AIProvider:
     _CACHE_TTL = 10  # seconds
     
     def __init__(self):
-        """Initialize AI provider with model auto-discovery."""
+        """Initialize AI provider with simple configuration."""
         self.provider_type = os.getenv("AI_PROVIDER", "auto").lower()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        self.gemini_model_override = os.getenv("GEMINI_MODEL", "")  # User override
-        self.gemini_model = None  # Will be auto-selected
-        self.available_models = []  # Will be populated during discovery
+        # Use override if set, otherwise use stable default
+        self.gemini_model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
+        self.gemini_fallback_attempted = False  # Track if we've tried fallback
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
-        
-        # Preferred models in priority order (best to fallback)
-        self.preferred_models = [
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-1.5-flash-8b",
-            "gemini-pro",
-            "gemini-2.0-flash-exp",  # Experimental
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-pro-latest",
-        ]
         
         # Log configuration at startup
         logger.info(f"[AI] ==================== AI PROVIDER INITIALIZATION ====================")
         logger.info(f"[AI] Provider type: {self.provider_type}")
-        logger.info(f"[AI] GEMINI_MODEL override: {self.gemini_model_override or 'none (will auto-select)'}")
+        logger.info(f"[AI] Gemini model: {self.gemini_model}")
+        logger.info(f"[AI] Gemini default: {DEFAULT_GEMINI_MODEL}")
         logger.info(f"[AI] GEMINI_API_KEY present: {bool(self.gemini_api_key)}")
         logger.info(f"[AI] GEMINI_AVAILABLE (SDK imported): {GEMINI_AVAILABLE}")
         
-        # Initialize Gemini client and discover models
+        # Initialize Gemini client if configured
         self.gemini_client = None
         if self.gemini_api_key and GEMINI_AVAILABLE:
             try:
                 self.gemini_client = genai.Client(api_key=self.gemini_api_key)
                 logger.info(f"[AI] ✓ Gemini client initialized successfully")
-                
-                # Discover available models
-                self._discover_gemini_models()
-                
             except Exception as e:
                 logger.error(f"[AI] ✗ Failed to initialize Gemini client: {type(e).__name__}: {e}")
         elif not self.gemini_api_key:
@@ -113,91 +102,9 @@ class AIProvider:
         self._select_provider()
         logger.info(f"[AI] ======================================================================")
     
-    def _discover_gemini_models(self):
-        """Discover available Gemini models for this API key and auto-select best one."""
-        if not self.gemini_client:
-            return
-        
-        try:
-            logger.info("[AI/Gemini] Discovering available models...")
-            
-            # List all models
-            models_response = self.gemini_client.models.list()
-            
-            # Parse available models
-            for model in models_response:
-                model_name = model.name
-                # Remove 'models/' prefix if present
-                if model_name.startswith("models/"):
-                    model_name = model_name[7:]
-                
-                # Check if supports generateContent
-                supported_methods = getattr(model, 'supported_generation_methods', [])
-                supports_generation = 'generateContent' in supported_methods if supported_methods else True
-                
-                self.available_models.append({
-                    "name": model_name,
-                    "supports_generation": supports_generation,
-                    "full_name": model.name
-                })
-                
-                logger.info(f"[AI/Gemini]   • {model_name} - supports_generation: {supports_generation}")
-            
-            logger.info(f"[AI/Gemini] Found {len(self.available_models)} models")
-            
-            # Select model
-            self._select_gemini_model()
-            
-        except Exception as e:
-            logger.error(f"[AI/Gemini] Model discovery failed: {type(e).__name__}: {e}")
-            logger.warning(f"[AI/Gemini] Will attempt to use override model if set")
-            
-            # If discovery fails but override is set, try using it
-            if self.gemini_model_override:
-                self.gemini_model = self.gemini_model_override
-                logger.info(f"[AI/Gemini] Using override model (unverified): {self.gemini_model}")
-    
-    def _select_gemini_model(self):
-        """Select the best available Gemini model."""
-        # If user provided override, try it first
-        if self.gemini_model_override:
-            # Check if override model is available
-            for model in self.available_models:
-                if model["name"] == self.gemini_model_override and model["supports_generation"]:
-                    self.gemini_model = self.gemini_model_override
-                    logger.info(f"[AI/Gemini] ✓ Selected user override model: {self.gemini_model}")
-                    return
-            
-            # Override not found or doesn't support generation
-            logger.warning(f"[AI/Gemini] ⚠ Override model '{self.gemini_model_override}' not available or doesn't support generation")
-            logger.info(f"[AI/Gemini] Falling back to auto-selection from available models...")
-        
-        # Auto-select from preferred list
-        generation_models = [m for m in self.available_models if m["supports_generation"]]
-        
-        if not generation_models:
-            logger.error(f"[AI/Gemini] ✗ No models support text generation for this API key")
-            return
-        
-        # Try preferred models in order
-        for preferred in self.preferred_models:
-            for model in generation_models:
-                if model["name"] == preferred:
-                    self.gemini_model = preferred
-                    logger.info(f"[AI/Gemini] ✓ Auto-selected model: {self.gemini_model}")
-                    return
-        
-        # If no preferred model found, use first available generation model
-        self.gemini_model = generation_models[0]["name"]
-        logger.info(f"[AI/Gemini] ✓ Selected first available model: {self.gemini_model}")
-    
     def get_selected_model(self) -> Optional[str]:
-        """Get the currently selected Gemini model name."""
+        """Get the currently configured Gemini model name."""
         return self.gemini_model
-    
-    def get_available_models(self) -> list:
-        """Get list of available Gemini models."""
-        return self.available_models
     
     def _select_provider(self) -> str:
         """
@@ -246,7 +153,7 @@ class AIProvider:
         return self._active_provider
     
     def _check_gemini(self) -> bool:
-        """Check if Gemini is available and configured with a valid model."""
+        """Check if Gemini is available and configured."""
         if not GEMINI_AVAILABLE:
             logger.debug("[AI] Gemini library not available")
             return False
@@ -259,17 +166,14 @@ class AIProvider:
             logger.debug("[AI] Gemini client not initialized")
             return False
         
-        if not self.gemini_model:
-            logger.debug("[AI] No Gemini model selected")
-            return False
-        
         # Check cache
         now = time.time()
         if (AIProvider._cache["gemini_available"] is not None and 
             now - AIProvider._cache["checked_at"] < AIProvider._CACHE_TTL):
             return AIProvider._cache["gemini_available"]
         
-        # Client is initialized and model is selected
+        # Client is initialized and API key is present - consider it available
+        # We don't test the actual API call here to avoid startup delays
         try:
             AIProvider._cache["gemini_available"] = True
             logger.debug(f"[AI] Gemini is available (model: {self.gemini_model})")
@@ -336,7 +240,7 @@ class AIProvider:
             return ""
     
     def _call_gemini(self, system_prompt: str, user_prompt: str, max_tokens: Optional[int] = None) -> str:
-        """Call Google Gemini API using auto-selected model."""
+        """Call Google Gemini API using simple, robust pattern."""
         try:
             logger.info(f"[AI/Gemini] Attempting call with model: '{self.gemini_model}'")
             logger.info(f"[AI/Gemini] Prompt length: {len(user_prompt)} chars, max_tokens: {max_tokens}")
@@ -347,7 +251,7 @@ class AIProvider:
                 return ""
             
             if not self.gemini_model:
-                logger.error("[AI/Gemini] No model selected")
+                logger.error("[AI/Gemini] No model configured")
                 return ""
             
             # Build generation config
@@ -357,7 +261,7 @@ class AIProvider:
             if max_tokens:
                 config["max_output_tokens"] = max_tokens
             
-            # Call the modern SDK
+            # Call the Gemini API
             logger.info(f"[AI/Gemini] Calling generate_content...")
             response = self.gemini_client.models.generate_content(
                 model=self.gemini_model,
@@ -368,6 +272,10 @@ class AIProvider:
             # Extract text from response
             content = response.text.strip() if hasattr(response, 'text') else ""
             logger.info(f"[AI/Gemini] SUCCESS - Response received: {len(content)} chars")
+            
+            # Reset fallback flag on success
+            self.gemini_fallback_attempted = False
+            
             return content
             
         except Exception as e:
@@ -375,12 +283,37 @@ class AIProvider:
             error_msg = str(e)
             logger.error(f"[AI/Gemini] FAILED - {error_type}: {error_msg}")
             logger.error(f"[AI/Gemini] Model attempted: '{self.gemini_model}'")
-            logger.error(f"[AI/Gemini] Configured model override: '{self.gemini_model_override}'")
-            logger.error(f"[AI/Gemini] Available models: {[m['name'] for m in self.available_models]}")
+            logger.error(f"[AI/Gemini] Default model: '{DEFAULT_GEMINI_MODEL}'")
             
-            # Invalidate cache on failure
-            AIProvider._cache["gemini_available"] = False
-            AIProvider._cache["checked_at"] = 0
+            # Handle 404 NOT_FOUND - try fallback to default model once
+            if "404" in error_msg or "NOT_FOUND" in error_msg:
+                if not self.gemini_fallback_attempted and self.gemini_model != DEFAULT_GEMINI_MODEL:
+                    logger.warning(f"[AI/Gemini] Model '{self.gemini_model}' not found, trying fallback: '{DEFAULT_GEMINI_MODEL}'")
+                    self.gemini_model = DEFAULT_GEMINI_MODEL
+                    self.gemini_fallback_attempted = True
+                    # Recursive call with default model
+                    return self._call_gemini(system_prompt, user_prompt, max_tokens)
+                else:
+                    logger.error(f"[AI/Gemini] Fallback to default model also failed or already attempted")
+            
+            # Handle rate limiting (429) - don't invalidate cache, just fail this request
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                logger.warning(f"[AI/Gemini] Rate limited - will retry on next request")
+                # Don't invalidate cache
+                return ""
+            
+            # Handle server errors (503, 500) - temporary issues
+            if "503" in error_msg or "500" in error_msg or "UNAVAILABLE" in error_msg:
+                logger.warning(f"[AI/Gemini] Server error - temporary issue")
+                # Don't invalidate cache
+                return ""
+            
+            # For other errors (invalid key, permission denied), invalidate cache
+            if "401" in error_msg or "403" in error_msg or "PERMISSION_DENIED" in error_msg or "INVALID_ARGUMENT" in error_msg:
+                logger.error(f"[AI/Gemini] Authentication/authorization error - marking as unavailable")
+                AIProvider._cache["gemini_available"] = False
+                AIProvider._cache["checked_at"] = 0
+            
             return ""
     
     def _call_ollama(self, system_prompt: str, user_prompt: str, max_tokens: Optional[int] = None) -> str:

@@ -133,7 +133,15 @@ async def health():
         health_status["ai_provider"] = base_agent.get_ai_provider_name()
         health_status["ai_available"] = base_agent.is_ai_available()
         health_status["ai_model"] = ai_provider.get_selected_model() if hasattr(ai_provider, 'get_selected_model') else None
-        health_status["ai_available_models"] = [m["name"] for m in ai_provider.get_available_models()] if hasattr(ai_provider, 'get_available_models') else []
+        
+        # Optional: Test actual AI call with tiny prompt (don't crash on failure)
+        if health_status["ai_available"]:
+            try:
+                test_response = base_agent.call_llm("You are a test.", "Reply with OK", max_tokens=5)
+                health_status["ai_test"] = "success" if test_response else "empty_response"
+            except Exception as test_err:
+                health_status["ai_test"] = f"failed: {type(test_err).__name__}"
+                logger.debug(f"[Health] AI test call failed (non-critical): {test_err}")
     except Exception as e:
         logger.error(f"[Health] AI provider check failed: {e}")
         health_status["ai_provider"] = "error"

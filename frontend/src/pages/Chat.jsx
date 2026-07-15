@@ -47,7 +47,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([{ id: 1, role: 'ai', text: "ANVIKSHA online. How can I assist, Commander?" }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [aiStatus, setAiStatus] = useState({ online: false, provider: 'unknown', checking: true })
+  const [aiStatus, setAiStatus] = useState({ online: false, provider: 'unknown', checking: true, fallback_reason: null })
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -62,10 +62,11 @@ export default function Chat() {
         setAiStatus({
           online: res.data.ai_available || false,
           provider: res.data.ai_provider || 'unknown',
-          checking: false
+          checking: false,
+          fallback_reason: res.data.ai_available ? null : 'AI not configured'
         })
       } catch (err) {
-        setAiStatus({ online: false, provider: 'error', checking: false })
+        setAiStatus({ online: false, provider: 'error', checking: false, fallback_reason: 'Connection error' })
       }
     }
     checkAiStatus()
@@ -80,16 +81,18 @@ export default function Chat() {
       const res = await api.post('/chat', { message: text })
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: res.data.response }])
       
-      // Update AI status from response
+      // Update AI status from response metadata
       if (res.data.ai_powered !== undefined) {
         setAiStatus(prev => ({
           ...prev,
           online: res.data.ai_powered,
-          provider: res.data.provider || res.data.model || prev.provider
+          provider: res.data.provider || res.data.model || prev.provider,
+          fallback_reason: res.data.fallback_reason || null
         }))
       }
     } catch (err) {
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: "Connection error." }])
+      setAiStatus(prev => ({ ...prev, online: false, fallback_reason: "Connection error" }))
     } finally {
       setLoading(false)
     }
