@@ -47,11 +47,29 @@ export default function Chat() {
   const [messages, setMessages] = useState([{ id: 1, role: 'ai', text: "ANVIKSHA online. How can I assist, Commander?" }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [aiStatus, setAiStatus] = useState({ online: false, provider: 'unknown', checking: true })
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  // Check AI status on mount
+  useEffect(() => {
+    const checkAiStatus = async () => {
+      try {
+        const res = await api.get('/health')
+        setAiStatus({
+          online: res.data.ai_available || false,
+          provider: res.data.ai_provider || 'unknown',
+          checking: false
+        })
+      } catch (err) {
+        setAiStatus({ online: false, provider: 'error', checking: false })
+      }
+    }
+    checkAiStatus()
+  }, [])
 
   const sendMessage = async (text) => {
     if (!text.trim()) return
@@ -61,6 +79,15 @@ export default function Chat() {
     try {
       const res = await api.post('/chat', { message: text })
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: res.data.response }])
+      
+      // Update AI status from response
+      if (res.data.ai_powered !== undefined) {
+        setAiStatus(prev => ({
+          ...prev,
+          online: res.data.ai_powered,
+          provider: res.data.provider || res.data.model || prev.provider
+        }))
+      }
     } catch (err) {
       setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: "Connection error." }])
     } finally {
@@ -89,9 +116,29 @@ export default function Chat() {
                 <p className="text-sm text-slate-400">Natural language mission intelligence interface</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-400/10 border border-green-400/30 rounded-lg shadow-lg shadow-green-500/10">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              <span className="text-xs text-green-400 font-mono font-bold tracking-wider">ONLINE</span>
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-lg ${
+              aiStatus.checking 
+                ? 'bg-slate-400/10 border border-slate-400/30 shadow-slate-500/10' 
+                : aiStatus.online 
+                  ? 'bg-green-400/10 border border-green-400/30 shadow-green-500/10' 
+                  : 'bg-amber-400/10 border border-amber-400/30 shadow-amber-500/10'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                aiStatus.checking 
+                  ? 'bg-slate-400 animate-pulse' 
+                  : aiStatus.online 
+                    ? 'bg-green-400 animate-pulse' 
+                    : 'bg-amber-400'
+              }`} />
+              <span className={`text-xs font-mono font-bold tracking-wider ${
+                aiStatus.checking 
+                  ? 'text-slate-400' 
+                  : aiStatus.online 
+                    ? 'text-green-400' 
+                    : 'text-amber-400'
+              }`}>
+                {aiStatus.checking ? 'CHECKING' : aiStatus.online ? 'AI ONLINE' : 'LIMITED MODE'}
+              </span>
             </div>
           </div>
         </GlassCard>
@@ -111,11 +158,19 @@ export default function Chat() {
               </div>
               <div className="flex-1">
                 <h3 className="text-base font-bold text-slate-100">ANVIKSHA</h3>
-                <p className="text-xs text-slate-500 font-mono">AI Strategic Advisor</p>
+                <p className="text-xs text-slate-500 font-mono">
+                  {aiStatus.online ? `AI Strategic Advisor • ${aiStatus.provider}` : 'AI Strategic Advisor • Rule-based Mode'}
+                </p>
               </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-400/10 border border-green-400/30 rounded-lg">
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full" />
-                <span className="text-xs text-green-400 font-mono font-semibold">Active</span>
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${
+                aiStatus.online 
+                  ? 'bg-green-400/10 border border-green-400/30' 
+                  : 'bg-amber-400/10 border border-amber-400/30'
+              }`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${aiStatus.online ? 'bg-green-400' : 'bg-amber-400'}`} />
+                <span className={`text-xs font-mono font-semibold ${aiStatus.online ? 'text-green-400' : 'text-amber-400'}`}>
+                  {aiStatus.online ? 'Active' : 'Limited'}
+                </span>
               </div>
             </div>
             

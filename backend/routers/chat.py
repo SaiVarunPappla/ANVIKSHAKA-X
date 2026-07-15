@@ -5,6 +5,7 @@ POST /api/chat — ANVIKSHA AI chat assistant endpoint
 """
 
 import logging
+import os
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
@@ -36,6 +37,9 @@ async def chat(payload: ChatRequest):
     ai_available = base_agent.is_ai_available()
     ai_provider = base_agent.get_ai_provider_name()
     logger.info(f"[Chat] AI provider: {ai_provider}, available: {ai_available}")
+    logger.info(f"[Chat] API key present: {bool(os.getenv('GEMINI_API_KEY'))}")
+    
+    fallback_reason = None
     
     if ai_available:
         logger.info(f"[Chat] Calling AI provider: {ai_provider}")
@@ -47,6 +51,7 @@ async def chat(payload: ChatRequest):
                 "response": response_text, 
                 "model": ai_provider, 
                 "ai_powered": True,
+                "provider": ai_provider,
                 "fallback_reason": None
             }
         else:
@@ -73,5 +78,6 @@ async def chat(payload: ChatRequest):
         "response": resp, 
         "model": "rule-based", 
         "ai_powered": False,
-        "fallback_reason": fallback_reason if 'fallback_reason' in locals() else "AI not configured"
+        "provider": "rule-based",
+        "fallback_reason": fallback_reason
     }

@@ -9,10 +9,9 @@ Unified AI provider interface supporting multiple backends:
 Environment Configuration:
 - AI_PROVIDER: "gemini", "ollama", "auto", or "rule-based" (default: "auto")
 - GEMINI_API_KEY: API key for Google Gemini (REQUIRED for AI features)
-- GEMINI_MODEL: Model name (default: "models/gemini-1.5-flash")
-  * IMPORTANT: Use "models/gemini-1.5-flash" or "models/gemini-1.5-pro" with google-generativeai v0.8.3
-  * The "models/" prefix is REQUIRED for this SDK version
-  * Without prefix, you'll get 404 model not found errors
+- GEMINI_MODEL: Model name (default: "gemini-2.0-flash-exp")
+  * Modern google-genai SDK (v0.2.x) - no "models/" prefix needed
+  * Supported models: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
 - OLLAMA_HOST: Ollama server URL (used by ollama-python library, default: "http://localhost:11434")
 - OLLAMA_MODEL: Ollama model name (default: "llama3")
 """
@@ -34,11 +33,11 @@ except ImportError:
     logger.info("[AI] Ollama library not installed")
 
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
-    logger.info("[AI] Google Generative AI library not installed")
+    logger.info("[AI] Google GenAI library not installed")
 
 
 class AIProviderType(str, Enum):
@@ -72,10 +71,8 @@ class AIProvider:
         """Initialize AI provider based on environment configuration."""
         self.provider_type = os.getenv("AI_PROVIDER", "auto").lower()
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-        # CRITICAL: Must use "models/" prefix with google-generativeai v0.8.3
-        # Without prefix: 404 model not found error
-        # With prefix: Works correctly
-        self.gemini_model = os.getenv("GEMINI_MODEL", "models/gemini-1.5-flash")
+        # Modern google-genai SDK (v0.2.x) - no "models/" prefix needed
+        self.gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
         
         # Log configuration at startup
@@ -85,17 +82,18 @@ class AIProvider:
         logger.info(f"[AI] GEMINI_API_KEY present: {bool(self.gemini_api_key)}")
         logger.info(f"[AI] GEMINI_AVAILABLE (SDK imported): {GEMINI_AVAILABLE}")
         
-        # Initialize Gemini if configured
+        # Initialize Gemini client if configured
+        self.gemini_client = None
         if self.gemini_api_key and GEMINI_AVAILABLE:
             try:
-                genai.configure(api_key=self.gemini_api_key)
-                logger.info(f"[AI] ✓ Gemini SDK configured successfully")
+                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+                logger.info(f"[AI] ✓ Gemini client initialized successfully")
             except Exception as e:
-                logger.error(f"[AI] ✗ Failed to configure Gemini SDK: {type(e).__name__}: {e}")
+                logger.error(f"[AI] ✗ Failed to initialize Gemini client: {type(e).__name__}: {e}")
         elif not self.gemini_api_key:
             logger.warning("[AI] ⚠ GEMINI_API_KEY not set - Gemini will not be available")
         elif not GEMINI_AVAILABLE:
-            logger.warning("[AI] ⚠ google-generativeai library not installed")
+            logger.warning("[AI] ⚠ google-genai library not installed")
         
         self._active_provider = None
         self._select_provider()
@@ -157,18 +155,21 @@ class AIProvider:
             logger.debug("[AI] Gemini API key not set")
             return False
         
+        if not self.gemini_client:
+            logger.debug("[AI] Gemini client not initialized")
+            return False
+        
         # Check cache
         now = time.time()
         if (AIProvider._cache["gemini_available"] is not None and 
             now - AIProvider._cache["checked_at"] < AIProvider._CACHE_TTL):
             return AIProvider._cache["gemini_available"]
         
-        # Don't try to validate the model during check - just verify SDK is configured
-        # Model validation happens during actual API call
+        # Client is initialized, consider it available
+        # Actual model validation happens during API call
         try:
-            # Simple check - if we have API key and SDK is imported, consider it available
             AIProvider._cache["gemini_available"] = True
-            logger.debug("[AI] Gemini is available (API key present, SDK configured)")
+            logger.debug("[AI] Gemini is available (API key present, client initialized)")
             return True
         except Exception as e:
             logger.debug(f"[AI] Gemini check failed: {e}")
@@ -237,32 +238,32 @@ class AIProvider:
             return ""
     
     def _call_gemini(self, system_prompt: str, user_prompt: str, max_tokens: Optional[int] = None) -> str:
-        """Call Google Gemini API."""
+        """Call Google Gemini API using modern google-genai SDK."""
         try:
             logger.info(f"[AI/Gemini] Attempting call with model: '{self.gemini_model}'")
             logger.info(f"[AI/Gemini] Prompt length: {len(user_prompt)} chars, max_tokens: {max_tokens}")
             
-            # Create model instance
-            # Note: google-generativeai v0.8.3 accepts model names with or without 'models/' prefix
-            model = genai.GenerativeModel(
-                model_name=self.gemini_model,
-                system_instruction=system_prompt
-            )
-            logger.info(f"[AI/Gemini] Model instance created successfully")
+            if not self.gemini_client:
+                logger.error("[AI/Gemini] Client not initialized")
+                return ""
             
-            # Configure generation
-            generation_config = {}
+            # Build generation config
+            config = {}
+            if system_prompt:
+                config["system_instruction"] = system_prompt
             if max_tokens:
-                generation_config["max_output_tokens"] = max_tokens
+                config["max_output_tokens"] = max_tokens
             
-            # Generate response
+            # Call the modern SDK
             logger.info(f"[AI/Gemini] Calling generate_content...")
-            response = model.generate_content(
-                user_prompt,
-                generation_config=generation_config if generation_config else None
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model,
+                contents=user_prompt,
+                config=config if config else None
             )
             
-            content = response.text.strip()
+            # Extract text from response
+            content = response.text.strip() if hasattr(response, 'text') else ""
             logger.info(f"[AI/Gemini] SUCCESS - Response received: {len(content)} chars")
             return content
             
