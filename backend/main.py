@@ -134,19 +134,33 @@ async def health():
         health_status["ai_available"] = base_agent.is_ai_available()
         health_status["ai_model"] = ai_provider.get_selected_model() if hasattr(ai_provider, 'get_selected_model') else None
         
-        # Optional: Test actual AI call with tiny prompt (don't crash on failure)
-        if health_status["ai_available"]:
+        # Test actual AI call with tiny prompt
+        if health_status["ai_available"] and health_status["ai_provider"] == "gemini":
             try:
-                test_response = base_agent.call_llm("You are a test.", "Reply with OK", max_tokens=5)
-                health_status["ai_test"] = "success" if test_response else "empty_response"
+                logger.info("[Health] Testing Gemini with tiny prompt...")
+                test_response = base_agent.call_llm("You are a test assistant.", "Reply with: OK", max_tokens=10)
+                if test_response:
+                    health_status["ai_test"] = "success"
+                    logger.info(f"[Health] AI test SUCCESS: {len(test_response)} chars")
+                else:
+                    health_status["ai_test"] = "empty_response"
+                    logger.warning(f"[Health] AI test returned empty response")
             except Exception as test_err:
-                health_status["ai_test"] = f"failed: {type(test_err).__name__}"
-                logger.debug(f"[Health] AI test call failed (non-critical): {test_err}")
+                health_status["ai_test"] = f"error: {type(test_err).__name__}"
+                health_status["ai_available"] = False  # Mark as unavailable on test failure
+                logger.error(f"[Health] AI test call failed: {type(test_err).__name__}: {test_err}")
+        elif health_status["ai_available"]:
+            # Ollama or other provider
+            health_status["ai_test"] = "skipped (non-gemini provider)"
+        else:
+            health_status["ai_test"] = "unavailable"
+            
     except Exception as e:
         logger.error(f"[Health] AI provider check failed: {e}")
         health_status["ai_provider"] = "error"
         health_status["ai_available"] = False
         health_status["ai_error"] = str(e)
+        health_status["ai_test"] = f"error: {type(e).__name__}"
     
     # Test database connectivity
     try:

@@ -269,14 +269,69 @@ class AIProvider:
                 config=config if config else None
             )
             
-            # Extract text from response
-            content = response.text.strip() if hasattr(response, 'text') else ""
-            logger.info(f"[AI/Gemini] SUCCESS - Response received: {len(content)} chars")
+            # Log raw response structure for debugging
+            logger.info(f"[AI/Gemini] Response received - analyzing structure...")
+            logger.info(f"[AI/Gemini] Has 'text' attribute: {hasattr(response, 'text')}")
+            logger.info(f"[AI/Gemini] Has 'candidates' attribute: {hasattr(response, 'candidates')}")
             
-            # Reset fallback flag on success
-            self.gemini_fallback_attempted = False
+            # Extract text from response - try multiple methods
+            content = ""
             
-            return content
+            # Method 1: Try response.text directly
+            if hasattr(response, 'text'):
+                try:
+                    content = response.text
+                    if content:
+                        logger.info(f"[AI/Gemini] Extracted via response.text: {len(content)} chars")
+                except Exception as e:
+                    logger.warning(f"[AI/Gemini] Failed to access response.text: {e}")
+            
+            # Method 2: If text is empty, try candidates
+            if not content and hasattr(response, 'candidates'):
+                try:
+                    candidates = response.candidates
+                    logger.info(f"[AI/Gemini] Found {len(candidates)} candidates")
+                    
+                    if candidates and len(candidates) > 0:
+                        candidate = candidates[0]
+                        logger.info(f"[AI/Gemini] First candidate type: {type(candidate)}")
+                        logger.info(f"[AI/Gemini] Has 'content': {hasattr(candidate, 'content')}")
+                        
+                        if hasattr(candidate, 'content'):
+                            content_obj = candidate.content
+                            logger.info(f"[AI/Gemini] Content type: {type(content_obj)}")
+                            logger.info(f"[AI/Gemini] Has 'parts': {hasattr(content_obj, 'parts')}")
+                            
+                            if hasattr(content_obj, 'parts'):
+                                parts = content_obj.parts
+                                logger.info(f"[AI/Gemini] Found {len(parts)} content parts")
+                                
+                                # Join all text parts
+                                text_parts = []
+                                for i, part in enumerate(parts):
+                                    if hasattr(part, 'text'):
+                                        text_parts.append(part.text)
+                                        logger.info(f"[AI/Gemini] Part {i}: {len(part.text)} chars")
+                                
+                                content = " ".join(text_parts)
+                                if content:
+                                    logger.info(f"[AI/Gemini] Extracted via candidates[0].content.parts: {len(content)} chars")
+                except Exception as e:
+                    logger.error(f"[AI/Gemini] Failed to extract from candidates: {type(e).__name__}: {e}")
+            
+            # Strip and validate
+            content = content.strip() if content else ""
+            
+            if content:
+                logger.info(f"[AI/Gemini] SUCCESS - Final content: {len(content)} chars")
+                # Reset fallback flag on success
+                self.gemini_fallback_attempted = False
+                return content
+            else:
+                logger.warning(f"[AI/Gemini] Response received but no usable text content found")
+                logger.warning(f"[AI/Gemini] Response type: {type(response)}")
+                logger.warning(f"[AI/Gemini] Response dir: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+                return ""
             
         except Exception as e:
             error_type = type(e).__name__
